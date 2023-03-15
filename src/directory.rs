@@ -1,6 +1,5 @@
+use crate::api::{responses::DirectoryMeta, Api};
 use reqwest::Client;
-use serde::Deserialize;
-use std::sync::Arc;
 
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
@@ -14,12 +13,17 @@ pub const LETS_ENCRYPT_STAGING_URL: &str = "https://acme-staging-v02.api.letsenc
 pub struct DirectoryBuilder {
     url: String,
     client: Option<Client>,
+    max_nonces: usize,
 }
 
 impl DirectoryBuilder {
     /// Creates a new builder with the specified directory root URL.
     pub fn new(url: String) -> Self {
-        DirectoryBuilder { url, client: None }
+        DirectoryBuilder {
+            url,
+            client: None,
+            max_nonces: 10,
+        }
     }
 
     /// Use a custom [`reqwest::Client`] for all outbount HTTP requests
@@ -29,52 +33,30 @@ impl DirectoryBuilder {
         self
     }
 
+    /// Set the maximum number of nonces to keep, defaults to 10
+    pub fn max_nonces(mut self, max: usize) -> Self {
+        self.max_nonces = max;
+        self
+    }
+
     /// Build a [`Directory`] using the given parameters.
     ///
     /// If no http client is specified, a default client will be created with
     /// the user-agent `lers/<version>`.
-    pub async fn build(self) -> Result<Arc<Directory>, reqwest::Error> {
+    pub async fn build(self) -> Result<Directory, reqwest::Error> {
         let client = self
             .client
             .unwrap_or_else(|| Client::builder().user_agent(USER_AGENT).build().unwrap());
 
-        let info = client.get(self.url).send().await?.json().await?;
+        let api = Api::from_url(self.url, client, self.max_nonces).await?;
 
-        Ok(Arc::new(Directory { info, client }))
+        Ok(Directory(api))
     }
 }
 
 /// Entry point for accessing an ACME API
-#[derive(Debug)]
-pub struct Directory {
-    client: Client,
-    info: DirectoryInfo,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DirectoryInfo {
-    new_nonce: String,
-    new_account: String,
-    new_order: String,
-    revoke_cert: String,
-    key_change: String,
-    new_authz: Option<String>,
-    #[serde(default)]
-    meta: DirectoryMeta,
-}
-
-/// Metadata about a directory.
-///
-/// Directories are not required to provide this information.
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DirectoryMeta {
-    pub terms_of_service: Option<String>,
-    pub website: Option<String>,
-    pub caa_identities: Option<Vec<String>>,
-    pub external_account_required: Option<bool>,
-}
+#[derive(Clone, Debug)]
+pub struct Directory(Api);
 
 impl Directory {
     /// Build a new directory with the specified root URL
@@ -85,7 +67,7 @@ impl Directory {
     /// Get optional metadata about the directory
     #[inline(always)]
     pub fn meta(&self) -> &DirectoryMeta {
-        &self.info.meta
+        self.0.meta()
     }
 }
 
@@ -101,27 +83,6 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            directory.info.new_nonce,
-            "https://acme-staging-v02.api.letsencrypt.org/acme/new-nonce"
-        );
-        assert_eq!(
-            directory.info.new_account,
-            "https://acme-staging-v02.api.letsencrypt.org/acme/new-acct"
-        );
-        assert_eq!(
-            directory.info.new_order,
-            "https://acme-staging-v02.api.letsencrypt.org/acme/new-order"
-        );
-        assert_eq!(
-            directory.info.revoke_cert,
-            "https://acme-staging-v02.api.letsencrypt.org/acme/revoke-cert"
-        );
-        assert_eq!(
-            directory.info.key_change,
-            "https://acme-staging-v02.api.letsencrypt.org/acme/key-change"
-        );
-        assert_eq!(directory.info.new_authz, None);
         assert_eq!(
             directory.meta().terms_of_service,
             Some("https://letsencrypt.org/documents/LE-SA-v1.3-September-21-2022.pdf".into())
