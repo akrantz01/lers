@@ -5,4 +5,16 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["webpki-roots"]
+native-roots = ["reqwest/rustls-tls-native-roots"]
+webpki-roots = ["reqwest/rustls-tls-webpki-roots"]
+
 [dependencies]
+reqwest = { version = "0.11.14", default-features = false, features = ["json", "__rustls"] }
+rustls = "0.20"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["fs", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
