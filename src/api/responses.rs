@@ -4,12 +4,19 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Directory {
+    /// URL for the [newNonce](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.2) operation
     pub new_nonce: String,
+    /// URL for the [newAccount](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.3) operation
     pub new_account: String,
+    /// URL for the [newOrder](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.4) operation
     pub new_order: String,
+    /// URL for the [revokeCert](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.6) operation
     pub revoke_cert: String,
+    /// URL for the [keyChange](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.3.5) operation
     pub key_change: String,
+    /// URL for the [newAuthz](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.4.1) operation
     pub new_authz: Option<String>,
+    /// Metadata relating to the service provided by the ACME server
     #[serde(default)]
     pub meta: DirectoryMeta,
 }
@@ -20,9 +27,16 @@ pub struct Directory {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirectoryMeta {
+    /// A URL identifying the current terms of service.
     pub terms_of_service: Option<String>,
+    /// An HTTP or HTTPS URL locating a website providing more information about the ACME server.
     pub website: Option<String>,
+    /// The hostnames that the ACME server recognizes as referring to itself for the purposes of
+    /// CAA record validation as defined in [RFC6844](https://www.rfc-editor.org/rfc/rfc6844.html).
     pub caa_identities: Option<Vec<String>>,
+    /// If this field is present and set to "true", then the CA requires that all newAccount
+    /// requests include an "externalAccountBinding" field associating the new account with
+    /// an external account.
     pub external_account_required: Option<bool>,
 }
 
