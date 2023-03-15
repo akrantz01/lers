@@ -1,8 +1,9 @@
-use reqwest::{header::ToStrError, Client, Response};
+use super::error::{Error, Result};
+use reqwest::{Client, Response};
 use std::{collections::VecDeque, sync::Mutex};
 
 #[derive(Debug)]
-pub struct Pool {
+pub(crate) struct Pool {
     pool: Mutex<VecDeque<String>>,
     max: usize,
 }
@@ -16,7 +17,7 @@ impl Pool {
     }
 
     /// Get a nonce used to sign the request
-    pub async fn get(&self, url: &str, client: &Client) -> Result<String, reqwest::Error> {
+    pub async fn get(&self, url: &str, client: &Client) -> Result<String> {
         {
             let mut pool = self.pool.lock().unwrap();
             if let Some(nonce) = pool.pop_front() {
@@ -26,19 +27,17 @@ impl Pool {
 
         let response = client.head(url).send().await?;
 
-        // TODO: handle nonce not existing and ToStrError
         let nonce = response
             .headers()
             .get("replay-nonce")
-            .unwrap()
-            .to_str()
-            .unwrap()
+            .ok_or(Error::MissingReplayNonce)?
+            .to_str()?
             .to_owned();
         Ok(nonce)
     }
 
     /// Extract a nonce from the `Replay-Nonce` header if it exists
-    pub fn extract_from_response(&self, response: &Response) -> Result<(), ToStrError> {
+    pub fn extract_from_response(&self, response: &Response) -> Result<()> {
         if let Some(nonce) = response.headers().get("replay-nonce") {
             let nonce = nonce.to_str()?.to_owned();
 

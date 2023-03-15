@@ -1,4 +1,4 @@
-use crate::api::{responses::DirectoryMeta, Api};
+use crate::api::{responses::DirectoryMeta, Api, Error};
 use reqwest::Client;
 
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -43,7 +43,7 @@ impl DirectoryBuilder {
     ///
     /// If no http client is specified, a default client will be created with
     /// the user-agent `lers/<version>`.
-    pub async fn build(self) -> Result<Directory, reqwest::Error> {
+    pub async fn build(self) -> Result<Directory, Error> {
         let client = self
             .client
             .unwrap_or_else(|| Client::builder().user_agent(USER_AGENT).build().unwrap());

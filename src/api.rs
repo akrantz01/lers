@@ -1,8 +1,12 @@
 use reqwest::Client;
 use std::sync::Arc;
 
+mod error;
 mod nonce;
-pub(crate) mod responses;
+pub mod responses;
+
+pub use error::Error;
+use error::Result;
 
 #[derive(Debug)]
 pub(crate) struct Api(Arc<ApiInner>);
@@ -16,11 +20,7 @@ struct ApiInner {
 
 impl Api {
     /// Construct the API for a directory from a URL
-    pub(crate) async fn from_url(
-        url: String,
-        client: Client,
-        max_nonces: usize,
-    ) -> Result<Api, reqwest::Error> {
+    pub(crate) async fn from_url(url: String, client: Client, max_nonces: usize) -> Result<Api> {
         let urls = client.get(url).send().await?.json().await?;
 
         let inner = ApiInner {
