@@ -2,6 +2,7 @@ use reqwest::Client;
 use std::sync::Arc;
 
 mod error;
+mod jws;
 mod nonce;
 pub mod responses;
 

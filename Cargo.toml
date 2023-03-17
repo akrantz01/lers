@@ -6,14 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["webpki-roots"]
-native-roots = ["reqwest/rustls-tls-native-roots"]
-webpki-roots = ["reqwest/rustls-tls-webpki-roots"]
+default = []
+vendored = ["openssl/vendored", "reqwest/native-tls-vendored"]
 
 [dependencies]
-reqwest = { version = "0.11.14", default-features = false, features = ["json", "__rustls"] }
-rustls = "0.20"
+base64 = "0.21.0"
+openssl = "0.10"
+reqwest = { version = "0.11.14", default-features = false, features = ["json", "native-tls"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.94"
 tokio = { version = "1", features = ["fs", "time"] }
 
 [dev-dependencies]
