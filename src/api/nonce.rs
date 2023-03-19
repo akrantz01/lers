@@ -1,4 +1,4 @@
-use super::error::{Error, Result};
+use crate::error::{Error, Result};
 use reqwest::{Client, Response};
 use std::{collections::VecDeque, sync::Mutex};
 
@@ -30,8 +30,9 @@ impl Pool {
         let nonce = response
             .headers()
             .get("replay-nonce")
-            .ok_or(Error::MissingReplayNonce)?
-            .to_str()?
+            .ok_or(Error::MissingHeader("replay-nonce"))?
+            .to_str()
+            .map_err(|e| Error::InvalidHeader("replay-nonce", e))?
             .to_owned();
         Ok(nonce)
     }
@@ -39,7 +40,10 @@ impl Pool {
     /// Extract a nonce from the `Replay-Nonce` header if it exists
     pub fn extract_from_response(&self, response: &Response) -> Result<()> {
         if let Some(nonce) = response.headers().get("replay-nonce") {
-            let nonce = nonce.to_str()?.to_owned();
+            let nonce = nonce
+                .to_str()
+                .map_err(|e| Error::InvalidHeader("replay-nonce", e))?
+                .to_owned();
 
             let mut pool = self.pool.lock().unwrap();
             pool.push_back(nonce);

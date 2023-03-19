@@ -1,4 +1,8 @@
-use crate::api::{responses::DirectoryMeta, Api, Error};
+use crate::{
+    account::{AccountBuilder, NoPrivateKey},
+    api::{responses::DirectoryMeta, Api},
+    error::Result,
+};
 use reqwest::Client;
 
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
@@ -8,6 +12,10 @@ pub const LETS_ENCRYPT_PRODUCTION_URL: &str = "https://acme-v02.api.letsencrypt.
 
 /// The Let's Encrypt staging ACMEv2 API
 pub const LETS_ENCRYPT_STAGING_URL: &str = "https://acme-staging-v02.api.letsencrypt.org/directory";
+
+/// The pebble test server URL
+#[cfg(test)]
+pub const TEST_URL: &str = "https://10.30.50.2:14000/dir";
 
 /// A builder used to create a [`Directory`]
 pub struct DirectoryBuilder {
@@ -43,7 +51,7 @@ impl DirectoryBuilder {
     ///
     /// If no http client is specified, a default client will be created with
     /// the user-agent `lers/<version>`.
-    pub async fn build(self) -> Result<Directory, Error> {
+    pub async fn build(self) -> Result<Directory> {
         let client = self
             .client
             .unwrap_or_else(|| Client::builder().user_agent(USER_AGENT).build().unwrap());
@@ -64,6 +72,11 @@ impl Directory {
         DirectoryBuilder::new(url.into())
     }
 
+    /// Access the builder to lookup an existing or create a new account
+    pub fn account(&self) -> AccountBuilder<NoPrivateKey> {
+        AccountBuilder::<NoPrivateKey>::new(self.0.clone())
+    }
+
     /// Get optional metadata about the directory
     #[inline(always)]
     pub fn meta(&self) -> &DirectoryMeta {
@@ -73,11 +86,10 @@ impl Directory {
 
 #[cfg(test)]
 mod tests {
-    use super::{Directory, LETS_ENCRYPT_STAGING_URL};
+    use super::{Directory, LETS_ENCRYPT_STAGING_URL, TEST_URL};
 
     #[tokio::test]
-    async fn initialize() {
-        // TODO: use Let's Encrypt Pebble for testing (https://github.com/letsencrypt/pebble)
+    async fn initialize_lets_encrypt() {
         let directory = Directory::builder(LETS_ENCRYPT_STAGING_URL)
             .build()
             .await
@@ -96,5 +108,18 @@ mod tests {
             Some(vec!["letsencrypt.org".into()])
         );
         assert_eq!(directory.meta().external_account_required, None);
+    }
+
+    #[tokio::test]
+    async fn initialize_pebble() {
+        let directory = Directory::builder(TEST_URL).build().await.unwrap();
+
+        assert_eq!(
+            directory.meta().terms_of_service,
+            Some("data:text/plain,Do%20what%20thou%20wilt".into())
+        );
+        assert_eq!(directory.meta().website, None);
+        assert_eq!(directory.meta().caa_identities, None);
+        assert_eq!(directory.meta().external_account_required, Some(false));
     }
 }

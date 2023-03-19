@@ -1,4 +1,4 @@
-use super::{jws, responses};
+use crate::api::{responses, JWSError};
 use reqwest::header::ToStrError;
 use std::{
     error::Error as StdError,
@@ -13,14 +13,15 @@ pub enum Error {
     Server(responses::Error),
     /// Error occurred while processing the request
     Reqwest(reqwest::Error),
-    /// The `Replay-Nonce` header was missing from the response
-    MissingReplayNonce,
-    /// The value of the `Replay-Nonce` header was invalid
-    InvalidReplayNonce(ToStrError),
     /// Failed serializing the request
     Serialization(serde_json::Error),
     /// Failed to generate JSON Web Signature for the request
-    JWS(jws::Error),
+    JWS(JWSError),
+    /// The `Location` header was missing from the response
+    MissingHeader(&'static str),
+    /// The header contained invalid data
+    InvalidHeader(&'static str, ToStrError),
+    InvalidAccount(responses::AccountStatus),
 }
 
 impl Display for Error {
@@ -28,12 +29,15 @@ impl Display for Error {
         match self {
             Self::Server(_) => write!(f, "an error occurred in the server"),
             Self::Reqwest(_) => write!(f, "an error occurred while processing the request"),
-            Self::MissingReplayNonce => write!(f, "the `replay-nonce` header was missing"),
-            Self::InvalidReplayNonce(_) => {
-                write!(f, "the value of the `replay-nonce` header was invalid")
-            }
             Self::Serialization(_) => write!(f, "an error occurred while serializing the request"),
             Self::JWS(_) => write!(f, "failed to generate json web signature for request"),
+            Self::MissingHeader(name) => write!(f, "the `{name}` header was missing"),
+            Self::InvalidHeader(name, _) => {
+                write!(f, "the value of the `{name}` header was invalid")
+            }
+            Self::InvalidAccount(status) => {
+                write!(f, "expected Valid account, got {status:?} account")
+            }
         }
     }
 }
@@ -43,10 +47,11 @@ impl StdError for Error {
         match self {
             Self::Server(_) => None,
             Self::Reqwest(e) => Some(e),
-            Self::MissingReplayNonce => None,
-            Self::InvalidReplayNonce(e) => Some(e),
             Self::Serialization(e) => Some(e),
             Self::JWS(e) => Some(e),
+            Self::MissingHeader(_) => None,
+            Self::InvalidHeader(_, e) => Some(e),
+            Self::InvalidAccount(_) => None,
         }
     }
 }
@@ -57,20 +62,14 @@ impl From<reqwest::Error> for Error {
     }
 }
 
-impl From<ToStrError> for Error {
-    fn from(err: ToStrError) -> Self {
-        Self::InvalidReplayNonce(err)
-    }
-}
-
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Self::Serialization(err)
     }
 }
 
-impl From<jws::Error> for Error {
-    fn from(err: jws::Error) -> Self {
+impl From<JWSError> for Error {
+    fn from(err: JWSError) -> Self {
         Self::JWS(err)
     }
 }
