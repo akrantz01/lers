@@ -1,10 +1,12 @@
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
-use openssl::bn::{BigNum, BigNumContext};
-use openssl::sign::Signer;
 use openssl::{
+    bn::{BigNum, BigNumContext},
+    ecdsa::EcdsaSig,
     hash::MessageDigest,
     nid::Nid,
     pkey::{Id, PKey, Private},
+    sha::{sha256, sha384, sha512},
+    sign::Signer,
 };
 use serde::Serialize;
 use std::{
@@ -57,20 +59,23 @@ enum Algorithm {
     // TODO: eventually support PS256, PS384, and PS512
 }
 
-/// Determine the algorithm and digest method to use from the private key.
-fn algorithm_and_digest(key: &PKey<Private>) -> Result<(Algorithm, MessageDigest), Error> {
-    match key.id() {
-        Id::RSA => Ok((Algorithm::RS256, MessageDigest::sha256())),
-        Id::EC => {
-            let ec_key = key.ec_key()?;
-            match ec_key.group().curve_name() {
-                Some(Nid::X9_62_PRIME256V1) => Ok((Algorithm::ES256, MessageDigest::sha256())),
-                Some(Nid::SECP384R1) => Ok((Algorithm::ES384, MessageDigest::sha384())),
-                Some(Nid::SECP521R1) => Ok((Algorithm::ES512, MessageDigest::sha512())),
-                _ => Err(Error::UnsupportedECDSACurve),
+impl TryFrom<&PKey<Private>> for Algorithm {
+    type Error = Error;
+
+    fn try_from(key: &PKey<Private>) -> Result<Self, Self::Error> {
+        match key.id() {
+            Id::RSA => Ok(Algorithm::RS256),
+            Id::EC => {
+                let ec = key.ec_key()?;
+                match ec.group().curve_name() {
+                    Some(Nid::X9_62_PRIME256V1) => Ok(Algorithm::ES256),
+                    Some(Nid::SECP384R1) => Ok(Algorithm::ES384),
+                    Some(Nid::SECP521R1) => Ok(Algorithm::ES512),
+                    _ => Err(Error::UnsupportedECDSACurve),
+                }
             }
+            _ => Err(Error::UnsupportedKeyType),
         }
-        _ => Err(Error::UnsupportedKeyType),
     }
 }
 
@@ -88,18 +93,34 @@ struct Header<'h> {
     jwk: Option<Jwk>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+enum Curve {
+    #[serde(rename = "P-256")]
+    P256,
+    #[serde(rename = "P-384")]
+    P384,
+    #[serde(rename = "P-521")]
+    P521,
+}
+
+impl TryFrom<Nid> for Curve {
+    type Error = Error;
+
+    fn try_from(group: Nid) -> Result<Self, Self::Error> {
+        match group {
+            Nid::X9_62_PRIME256V1 => Ok(Curve::P256),
+            Nid::SECP384R1 => Ok(Curve::P384),
+            Nid::SECP521R1 => Ok(Curve::P521),
+            _ => Err(Error::UnsupportedECDSACurve),
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(tag = "kty")]
 enum Jwk {
-    RSA {
-        e: String,
-        n: String,
-    },
-    EC {
-        crv: &'static str,
-        x: String,
-        y: String,
-    },
+    RSA { e: String, n: String },
+    EC { crv: Curve, x: String, y: String },
 }
 
 impl TryFrom<&PKey<Private>> for Jwk {
@@ -121,19 +142,17 @@ impl TryFrom<&PKey<Private>> for Jwk {
                 let mut ctx = BigNumContext::new()?;
                 let mut x = BigNum::new()?;
                 let mut y = BigNum::new()?;
-                ec_public.affine_coordinates(ec.group(), &mut x, &mut y, &mut ctx)?;
+                ec_public.affine_coordinates_gfp(ec.group(), &mut x, &mut y, &mut ctx)?;
 
-                let curve = match ec.group().curve_name() {
-                    Some(Nid::X9_62_PRIME256V1) => "P-256",
-                    Some(Nid::SECP384R1) => "P-384",
-                    Some(Nid::SECP521R1) => "P-521",
-                    _ => unreachable!(),
-                };
+                let curve = ec
+                    .group()
+                    .curve_name()
+                    .ok_or(Error::UnsupportedECDSACurve)?;
 
                 Ok(Jwk::EC {
                     x: BASE64.encode(&x.to_vec()),
                     y: BASE64.encode(&y.to_vec()),
-                    crv: curve,
+                    crv: Curve::try_from(curve)?,
                 })
             }
             _ => unreachable!(),
@@ -159,7 +178,7 @@ pub(crate) fn sign(
 ) -> Result<JWS, Error> {
     let payload = BASE64.encode(payload.as_bytes());
 
-    let (algorithm, digest) = algorithm_and_digest(private_key)?;
+    let algorithm = Algorithm::try_from(private_key)?;
     let header = match account_id {
         Some(kid) => Header {
             nonce,
@@ -180,11 +199,7 @@ pub(crate) fn sign(
     let protected = serde_json::to_vec(&header).unwrap();
     let protected = BASE64.encode(&protected);
 
-    let signature = {
-        let mut signer = Signer::new(digest, private_key)?;
-        signer.update(&format!("{protected}.{payload}").into_bytes())?;
-        signer.sign_to_vec()?
-    };
+    let signature = signer(private_key, &protected, &payload)?;
     let signature = BASE64.encode(&signature);
 
     Ok(JWS {
@@ -194,41 +209,43 @@ pub(crate) fn sign(
     })
 }
 
+/// Generate the signature for the protected data and message payload
+fn signer(private_key: &PKey<Private>, protected: &str, payload: &str) -> Result<Vec<u8>, Error> {
+    let data = format!("{protected}.{payload}").into_bytes();
+
+    match private_key.id() {
+        Id::RSA => {
+            let sig =
+                Signer::new(MessageDigest::sha256(), private_key)?.sign_oneshot_to_vec(&data)?;
+            Ok(sig)
+        }
+        Id::EC => {
+            let ec = private_key.ec_key()?;
+            let digest = match ec.group().curve_name() {
+                Some(Nid::X9_62_PRIME256V1) => sha256(&data).to_vec(),
+                Some(Nid::SECP384R1) => sha384(&data).to_vec(),
+                Some(Nid::SECP521R1) => sha512(&data).to_vec(),
+                _ => unreachable!(),
+            };
+
+            let sig = EcdsaSig::sign(&digest, &ec)?;
+            let r = sig.r().to_vec();
+            let s = sig.s().to_vec();
+
+            let mut result = Vec::with_capacity(r.len() + s.len());
+            result.extend_from_slice(&r);
+            result.extend_from_slice(&s);
+            Ok(result)
+        }
+        _ => Err(Error::UnsupportedKeyType),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{algorithm_and_digest, sign, Algorithm, Jwk};
-    use openssl::{hash::MessageDigest, pkey::PKey, rsa::Rsa};
+    use super::{sign, Curve, Jwk};
+    use openssl::pkey::PKey;
     use std::fs;
-
-    #[test]
-    fn validate_algorithm_and_digest() {
-        macro_rules! ec {
-            ($curve:expr => ($algo:ident, $digest:ident)) => {
-                let ec = PKey::ec_gen($curve).unwrap();
-                let (algorithm, digest) = algorithm_and_digest(&ec).unwrap();
-                assert_eq!(algorithm, Algorithm::$algo);
-                assert!(digest == MessageDigest::$digest());
-            };
-        }
-
-        macro_rules! rs {
-            ($bits:expr => ($algo:ident, $digest:ident)) => {
-                let rs = Rsa::generate($bits).unwrap();
-                let rs = PKey::from_rsa(rs).unwrap();
-                let (algorithm, digest) = algorithm_and_digest(&rs).unwrap();
-                assert_eq!(algorithm, Algorithm::$algo);
-                assert!(digest == MessageDigest::$digest());
-            };
-        }
-
-        ec!("prime256v1" => (ES256, sha256));
-        ec!("secp384r1" => (ES384, sha384));
-        ec!("secp521r1" => (ES512, sha512));
-
-        rs!(2048 => (RS256, sha256));
-        rs!(3072 => (RS256, sha256));
-        rs!(4096 => (RS256, sha256));
-    }
 
     #[test]
     fn jwk_rsa() {
@@ -246,7 +263,7 @@ mod tests {
         (
             $(
                 $name:ident ($file:expr) => {
-                    crv: $crv:expr,
+                    crv: $crv:ident,
                     x: $x:expr,
                     y: $y:expr,
                 }
@@ -261,7 +278,7 @@ mod tests {
                     let jwk = Jwk::try_from(&key).unwrap();
 
                     let Jwk::EC {crv, x: x_b64, y: y_b64 } = jwk else { panic!("not ec jwk") };
-                    assert_eq!(crv, $crv);
+                    assert_eq!(crv, Curve::$crv);
                     assert_eq!(x_b64, $x);
                     assert_eq!(y_b64, $y);
                 }
@@ -271,17 +288,17 @@ mod tests {
 
     jwk_ecdsa! {
         jwk_ecdsa_p_256("testdata/ecdsa_p-256.pem") => {
-            crv: "P-256",
+            crv: P256,
             x: "bFFJEKk0HrAyTVz69iCiV8KsX1bNwSx60o6Xlat9hPo",
             y: "fsxkWwspm4NA2lUWIf9DwlrOQgf2Y610ynAwJP_Gx0E",
         };
         jwk_ecdsa_p_384("testdata/ecdsa_p-384.pem") => {
-            crv: "P-384",
+            crv: P384,
             x: "MDD68TroskBcnk49wd7UI1nLI4o9q9DJH0P29ibkAb6AzLxg0mIu1U3NwUTKUf_l",
             y: "HldntIAzF67Nd-jfTDaiJxa0WMVHcZ5at_AQkxtT6aCu5jQ1zSKcPvVnj1Sv3JT2",
         };
         jwk_ecdsa_p_521("testdata/ecdsa_p-521.pem") => {
-            crv: "P-521",
+            crv: P521,
             x: "Ad27MiJgOobBKFO_YyAy6mQ_Dz2uGLF0UD3-MkF4hLa5Z__RCrNmtidjQ5FW64wahfzLeQamEA_KATh2zFBNhSM0",
             y: "AUyg4XumobEqaPCjUGC9Mc8SE2saUrYVd824Is1ercPjpq5Wx3HE-I2HvbtLmm29UX3T5IkHmKRbPIa7oB8Oo6PL",
         };
@@ -338,7 +355,7 @@ mod tests {
                     let pem = fs::read($file).unwrap();
                     let key = PKey::private_key_from_pem(&pem).unwrap();
 
-                    let sig = jws(JWS_URL, String::from(JWS_NONCE), JWS_PAYLOAD, &key, $acct).unwrap();
+                    let sig = sign(JWS_URL, String::from(JWS_NONCE), JWS_PAYLOAD, &key, $acct).unwrap();
 
                     assert_eq!(sig.protected, $protected);
                     assert_eq!(sig.payload, $payload);
