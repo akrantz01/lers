@@ -131,16 +131,13 @@ impl Clone for Api {
 #[cfg(test)]
 mod tests {
     use super::Api;
-    use crate::{LETS_ENCRYPT_STAGING_URL, TEST_URL};
-    use reqwest::Client;
+    use crate::{
+        test::{client, TEST_URL},
+        LETS_ENCRYPT_STAGING_URL,
+    };
 
     async fn create_api(url: String) -> Api {
-        let client = Client::builder()
-            .danger_accept_invalid_hostnames(true)
-            .user_agent("lers/testing")
-            .build()
-            .unwrap();
-        Api::from_url(url, client, 10).await.unwrap()
+        Api::from_url(url, client(), 10).await.unwrap()
     }
 
     #[tokio::test]

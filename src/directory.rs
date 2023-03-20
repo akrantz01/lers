@@ -13,10 +13,6 @@ pub const LETS_ENCRYPT_PRODUCTION_URL: &str = "https://acme-v02.api.letsencrypt.
 /// The Let's Encrypt staging ACMEv2 API
 pub const LETS_ENCRYPT_STAGING_URL: &str = "https://acme-staging-v02.api.letsencrypt.org/directory";
 
-/// The pebble test server URL
-#[cfg(test)]
-pub const TEST_URL: &str = "https://10.30.50.2:14000/dir";
-
 /// A builder used to create a [`Directory`]
 pub struct DirectoryBuilder {
     url: String,
@@ -86,7 +82,8 @@ impl Directory {
 
 #[cfg(test)]
 mod tests {
-    use super::{Directory, LETS_ENCRYPT_STAGING_URL, TEST_URL};
+    use super::{Directory, LETS_ENCRYPT_STAGING_URL};
+    use crate::test::directory;
 
     #[tokio::test]
     async fn initialize_lets_encrypt() {
@@ -112,7 +109,7 @@ mod tests {
 
     #[tokio::test]
     async fn initialize_pebble() {
-        let directory = Directory::builder(TEST_URL).build().await.unwrap();
+        let directory = directory().await;
 
         assert_eq!(
             directory.meta().terms_of_service,

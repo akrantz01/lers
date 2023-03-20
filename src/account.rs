@@ -59,8 +59,7 @@ impl AccountBuilder<NoPrivateKey> {
         let (id, account) = self
             .api
             .new_account(self.contacts, self.terms_of_service_agreed, false, &key)
-            .await
-            .unwrap();
+            .await?;
 
         into_account(self.api, key, id, account)
     }
@@ -78,8 +77,7 @@ impl AccountBuilder<WithPrivateKey> {
                 true,
                 &self.private_key.0,
             )
-            .await
-            .unwrap();
+            .await?;
 
         into_account(self.api, self.private_key.0, id, account)
     }
@@ -94,8 +92,7 @@ impl AccountBuilder<WithPrivateKey> {
                 false,
                 &self.private_key.0,
             )
-            .await
-            .unwrap();
+            .await?;
 
         into_account(self.api, self.private_key.0, id, account)
     }
@@ -128,65 +125,90 @@ pub struct Account {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Directory, TEST_URL};
+    use crate::{responses::ErrorType, test::directory, Error};
+    use once_cell::sync::Lazy;
     use openssl::pkey::{PKey, Private};
-    use std::fs;
+    use parking_lot::Mutex;
+    use std::{collections::HashSet, fs};
 
-    fn private_key() -> PKey<Private> {
-        let pem = fs::read("testdata/rsa_2048.pem").unwrap();
+    static ACCOUNT_IDS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| {
+        let mut seeded = HashSet::new();
+        seeded.insert("https://10.30.50.2:14000/my-account/1".into());
+        seeded.insert("https://10.30.50.2:14000/my-account/2".into());
+        Mutex::new(seeded)
+    });
+
+    fn private_key(account: u8) -> PKey<Private> {
+        let pem = fs::read(format!("testdata/accounts/{account}.pem")).unwrap();
         PKey::private_key_from_pem(&pem).unwrap()
-    }
-
-    async fn directory() -> Directory {
-        Directory::builder(TEST_URL).build().await.unwrap()
     }
 
     #[tokio::test]
     async fn lookup_when_exists() {
         let directory = directory().await;
-        let _account = directory
+        let account = directory
             .account()
-            .contacts(vec!["mailto:test@user.com".into()])
-            .private_key(private_key())
+            .contacts(vec!["mailto:exists@lookup.test".into()])
+            .private_key(private_key(1))
             .lookup()
             .await
             .unwrap();
+
+        let mut ids = ACCOUNT_IDS.lock();
+        assert!(!ids.insert(account.id));
     }
 
     #[tokio::test]
     async fn lookup_when_does_not_exists() {
         let directory = directory().await;
-        let _account = directory
+
+        let key = PKey::ec_gen("prime256v1").unwrap();
+        let result = directory
             .account()
-            .contacts(vec!["mailto:test@user.com".into()])
-            .private_key(private_key())
+            .contacts(vec!["mailto:does-not-exist@lookup.test".into()])
+            .private_key(key)
             .lookup()
-            .await
-            .unwrap();
+            .await;
+
+        let Error::Server(error) = result.unwrap_err() else { panic!("must be server error") };
+        assert_eq!(error.type_, ErrorType::AccountDoesNotExist);
+        assert_eq!(error.title, None);
+        assert_eq!(
+            error.detail,
+            Some("unable to find existing account for only-return-existing request".into())
+        );
+        assert_eq!(error.status, Some(400));
+        assert!(error.subproblems.is_none());
     }
 
     #[tokio::test]
     async fn create_if_not_exists_when_does_not_exist() {
         let directory = directory().await;
-        let _account = directory
+        let account = directory
             .account()
             .terms_of_service_agreed(true)
-            .contacts(vec!["mailto:test@user.com".into()])
+            .contacts(vec!["mailto:does-not-exist@create.test".into()])
             .create_if_not_exists()
             .await
             .unwrap();
+
+        let mut ids = ACCOUNT_IDS.lock();
+        assert!(ids.insert(account.id));
     }
 
     #[tokio::test]
     async fn create_if_not_exists_when_exists() {
         let directory = directory().await;
-        let _account = directory
+        let account = directory
             .account()
             .terms_of_service_agreed(true)
-            .contacts(vec!["mailto:test@user.com".into()])
-            .private_key(private_key())
+            .contacts(vec!["mailto:exists@create.test".into()])
+            .private_key(private_key(2))
             .create_if_not_exists()
             .await
             .unwrap();
+
+        let mut ids = ACCOUNT_IDS.lock();
+        assert!(!ids.insert(account.id));
     }
 }

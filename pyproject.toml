@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "hack"
+version = "0.1.0"
+description = ""
+authors = ["Alex Krantz <alex@krantz.dev>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+acme = "^2.4.0"
+requests = "^2.28.2"
+josepy = "^1.13.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
