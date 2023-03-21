@@ -115,18 +115,18 @@ pub struct NewOrder {
 #[serde(rename_all = "camelCase")]
 pub struct Authorization {
     /// The identifier that the account is authorized to represent.
-    identifier: Identifier,
+    pub identifier: Identifier,
     /// The status of this authorization.
-    status: AuthorizationStatus,
+    pub status: AuthorizationStatus,
     /// The timestamp after which the server will consider this authorization invalid. Guaranteed
     /// to be present once the authorization is `Valid`.
-    expires: Option<DateTime<Utc>>,
+    pub expires: Option<DateTime<Utc>>,
     /// For pending authorizations, the challenges that the client can fulfill in order to prove
     /// possession of the identifier. For valid authorizations, the challenge that was validated.
     /// For invalid authorizations, the challenge that was attempted and failed.
-    challenges: Vec<Challenge>,
+    pub challenges: Vec<Challenge>,
     /// Indicates the order contained a DNS identifier that was a wildcard domain name.
-    wildcard: Option<bool>,
+    pub wildcard: Option<bool>,
 }
 
 /// The status of an authorization
@@ -153,13 +153,13 @@ pub enum AuthorizationStatus {
 #[serde(rename_all = "camelCase")]
 pub struct Challenge {
     /// The URL to which a response can be posted.
-    url: String,
+    pub url: String,
     /// The status of this challenge.
-    status: ChallengeStatus,
+    pub status: ChallengeStatus,
     /// he time at which the server validated this challenge.
-    validated: Option<DateTime<Utc>>,
+    pub validated: Option<DateTime<Utc>>,
     #[serde(flatten)]
-    type_: ChallengeType,
+    pub type_: ChallengeType,
 }
 
 /// The possible challenges that can be returned by the server
