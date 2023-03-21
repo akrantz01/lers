@@ -1,7 +1,7 @@
-use crate::order::Order;
 use crate::{
     account::Account,
     error::{Error, Result},
+    order::Order,
     responses::Identifier,
 };
 use chrono::{DateTime, Utc};

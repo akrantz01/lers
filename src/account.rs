@@ -1,6 +1,6 @@
-use crate::certificate::CertificateBuilder;
 use crate::{
     api::Api,
+    certificate::CertificateBuilder,
     error::Result,
     responses::{self, AccountStatus},
     Error,
