@@ -1,5 +1,7 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// Represents a set of metadata associated with an account.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
@@ -44,6 +46,162 @@ pub struct NewAccount {
     /// client to look up an account URL based on an account key
     pub only_return_existing: bool,
     // TODO: support externalAccountBinding (https://www.rfc-editor.org/rfc/rfc8555.html#section-7.3.4)
+}
+
+/// Represents a client's request for a certificate that is used to track the progress of that order
+/// through to issuance.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Order {
+    /// The status of the order
+    pub status: OrderStatus,
+    /// The timestamp after which the server will consider this order invalid
+    pub expires: Option<DateTime<Utc>>,
+    /// The identifiers this order pertains to
+    pub identifiers: Vec<Identifier>,
+    /// The requested value of the `notBefore` field in the certificate
+    pub not_before: Option<DateTime<Utc>>,
+    /// The requested value of the `notAfter` field in the certificate
+    pub not_after: Option<DateTime<Utc>>,
+    /// The error that occurred while processing the order, if any.
+    pub error: Option<Error>,
+    /// The authorizations that the client needs to complete before the requested certificate can be
+    /// issued, including unexpired authorizations that the client has completed in the past for
+    /// identifiers specified in the order. The authorizations required are dictated by server
+    /// policy; there may not be a 1:1 relationship between the order identifiers and the
+    /// authorizations required.
+    pub authorizations: Vec<String>,
+    /// A URL that a CSR must be sent to once all of the order's authorizations are satisfied to
+    /// finalize the order. The result of a successful finalization will be the population of the
+    /// certificate URL for the order.
+    pub finalize: String,
+    /// A URL for the certificate that has been issued in response to this order.
+    pub certificate: Option<String>,
+}
+
+/// The status of an order
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum OrderStatus {
+    /// The order was created
+    Pending,
+    /// The order's authorizations are all valid
+    Ready,
+    /// The order is waiting to be finalized by the server
+    Processing,
+    /// A certificate was issued
+    Valid,
+    /// An error occurred in the order during one of the previous stages or one of the
+    /// authorizations failed.
+    Invalid,
+}
+
+/// Request payload for the [newOrder](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.4)
+/// operation.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewOrder {
+    /// The identifiers this order pertains to
+    pub identifiers: Vec<Identifier>,
+    /// The requested value of the `notBefore` field in the certificate
+    pub not_before: Option<DateTime<Utc>>,
+    /// The requested value of the `notAfter` field in the certificate
+    pub not_after: Option<DateTime<Utc>>,
+}
+
+/// An ACME authorization object represents a server's authorization for an account to represent
+/// an identifier.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Authorization {
+    /// The identifier that the account is authorized to represent.
+    identifier: Identifier,
+    /// The status of this authorization.
+    status: AuthorizationStatus,
+    /// The timestamp after which the server will consider this authorization invalid. Guaranteed
+    /// to be present once the authorization is `Valid`.
+    expires: Option<DateTime<Utc>>,
+    /// For pending authorizations, the challenges that the client can fulfill in order to prove
+    /// possession of the identifier. For valid authorizations, the challenge that was validated.
+    /// For invalid authorizations, the challenge that was attempted and failed.
+    challenges: Vec<Challenge>,
+    /// Indicates the order contained a DNS identifier that was a wildcard domain name.
+    wildcard: Option<bool>,
+}
+
+/// The status of an authorization
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthorizationStatus {
+    /// The authorization is waiting for a challenge to be successful
+    Pending,
+    /// The authorization has been completed successfully
+    Valid,
+    /// One of the challenges failed or an error occurred while waiting for a challenge to complete
+    Invalid,
+    /// The authorization was deactivated by the client
+    Deactivated,
+    /// The authorization expired due to inaction
+    Expired,
+    /// The authorization was revoked by the server
+    Revoked,
+}
+
+/// An ACME challenge object represents a server's offer to validate a client's possession of an
+/// identifier in a specific way.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Challenge {
+    /// The URL to which a response can be posted.
+    url: String,
+    /// The status of this challenge.
+    status: ChallengeStatus,
+    /// he time at which the server validated this challenge.
+    validated: Option<DateTime<Utc>>,
+    #[serde(flatten)]
+    type_: ChallengeType,
+}
+
+/// The possible challenges that can be returned by the server
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+#[non_exhaustive]
+pub enum ChallengeType {
+    /// With HTTP validation, the client in an ACME transaction proves its control over a domain
+    /// name by proving that it can provision HTTP resources on a server accessible under that
+    /// domain name.  The ACME server challenges the client to provision a file at a specific path,
+    /// with a specific string as its content.
+    #[serde(rename = "http-01")]
+    Http01 {
+        /// A random value that uniquely identifies the challenge.
+        token: String,
+    },
+    /// When the identifier being validated is a domain name, the client can prove control of that
+    /// domain by provisioning a TXT resource record containing a designated value for a specific
+    /// validation domain name.
+    #[serde(rename = "dns-01")]
+    Dns01 {
+        /// A random value that uniquely identifies the challenge.
+        token: String,
+    },
+    /// The server responded with an unknown challenge type
+    #[serde(other)]
+    Unknown,
+    // TODO: support TLS-ALPN-01
+}
+
+/// The status of an authorization challenge
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChallengeStatus {
+    /// The challenge was created and is waiting for user action
+    Pending,
+    /// The server is processing the challenge
+    Processing,
+    /// The challenge was validated successfully
+    Valid,
+    /// The challenge failed validation
+    Invalid,
 }
 
 /// Directory URLs and optional metadata
@@ -213,7 +371,7 @@ pub struct SubProblem {
 }
 
 /// Identifiers that can be present in an authorization object
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type", content = "value")]
 pub enum Identifier {
     /// A DNS identifier

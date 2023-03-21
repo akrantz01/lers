@@ -11,6 +11,8 @@ vendored = ["openssl/vendored", "reqwest/native-tls-vendored"]
 
 [dependencies]
 base64 = "0.21.0"
+chrono = { version = "0.4", features = ["serde"] }
+futures = { version = "0.3", default-features = false, features = ["async-await", "std"] }
 openssl = "0.10"
 reqwest = { version = "0.11.14", default-features = false, features = ["json", "native-tls"] }
 serde = { version = "1", features = ["derive"] }

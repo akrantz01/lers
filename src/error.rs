@@ -21,7 +21,10 @@ pub enum Error {
     MissingHeader(&'static str),
     /// The header contained invalid data
     InvalidHeader(&'static str, ToStrError),
+    /// The account's status is not set to `Valid`
     InvalidAccount(responses::AccountStatus),
+    /// The certificate must have at least one identifier associated with it
+    MissingIdentifiers,
 }
 
 impl Display for Error {
@@ -38,6 +41,10 @@ impl Display for Error {
             Self::InvalidAccount(status) => {
                 write!(f, "expected Valid account, got {status:?} account")
             }
+            Self::MissingIdentifiers => write!(
+                f,
+                "the certificate must have at least one identifier associated with it"
+            ),
         }
     }
 }
@@ -52,6 +59,7 @@ impl StdError for Error {
             Self::MissingHeader(_) => None,
             Self::InvalidHeader(_, e) => Some(e),
             Self::InvalidAccount(_) => None,
+            Self::MissingIdentifiers => None,
         }
     }
 }

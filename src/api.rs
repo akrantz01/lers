@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use chrono::{DateTime, Utc};
 use openssl::pkey::{PKey, Private};
 use reqwest::{header, Client, Response};
 use serde::Serialize;
@@ -49,22 +50,33 @@ impl Api {
             .await
     }
 
-    /// Perform an authenticated request to the API
-    async fn request<S: Serialize>(
+    /// Perform an authenticated request to the API with a JSON body
+    async fn request_json<S: Serialize>(
         &self,
         url: &str,
         body: S,
         private_key: &PKey<Private>,
         account_id: Option<&str>,
     ) -> Result<Response> {
-        let payload = serde_json::to_string(&body)?;
+        let body = serde_json::to_string(&body)?;
+        self.request(url, &body, private_key, account_id).await
+    }
+
+    /// Perform an authenticated request to the API
+    async fn request(
+        &self,
+        url: &str,
+        body: &str,
+        private_key: &PKey<Private>,
+        account_id: Option<&str>,
+    ) -> Result<Response> {
         let mut attempt = 0;
 
         loop {
             attempt += 1;
 
             let nonce = self.next_nonce().await?;
-            let body = jws::sign(url, nonce, &payload, private_key, account_id)?;
+            let body = jws::sign(url, nonce, body, private_key, account_id)?;
             let body = serde_json::to_vec(&body)?;
 
             let response = self
@@ -106,19 +118,65 @@ impl Api {
             only_return_existing,
         };
         let response = self
-            .request(&self.0.urls.new_account, &payload, private_key, None)
+            .request_json(&self.0.urls.new_account, &payload, private_key, None)
             .await?;
 
-        let id = response
-            .headers()
-            .get(header::LOCATION)
-            .ok_or(Error::MissingHeader("location"))?
-            .to_str()
-            .map_err(|e| Error::InvalidHeader("location", e))?
-            .to_owned();
-
+        let id = location_header(&response)?;
         let account = response.json::<responses::Account>().await?;
         Ok((id, account))
+    }
+
+    /// Perform the [newOrder](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.4) operation.
+    /// Returns the order's URL and creation response.
+    pub async fn new_order(
+        &self,
+        identifiers: Vec<responses::Identifier>,
+        not_before: Option<DateTime<Utc>>,
+        not_after: Option<DateTime<Utc>>,
+        private_key: &PKey<Private>,
+        account_id: &str,
+    ) -> Result<(String, responses::Order)> {
+        let payload = responses::NewOrder {
+            identifiers,
+            not_before,
+            not_after,
+        };
+        let response = self
+            .request_json(
+                &self.0.urls.new_order,
+                &payload,
+                private_key,
+                Some(account_id),
+            )
+            .await?;
+
+        let url = location_header(&response)?;
+        let order = response.json().await?;
+        Ok((url, order))
+    }
+
+    /// Fetch an order
+    pub async fn fetch_order(
+        &self,
+        url: &str,
+        private_key: &PKey<Private>,
+        account_id: &str,
+    ) -> Result<responses::Order> {
+        let response = self.request(url, "", private_key, Some(account_id)).await?;
+        let order = response.json().await?;
+        Ok(order)
+    }
+
+    /// Fetch an authorization
+    pub async fn fetch_authorization(
+        &self,
+        url: &str,
+        private_key: &PKey<Private>,
+        account_id: &str,
+    ) -> Result<responses::Authorization> {
+        let response = self.request(url, "", private_key, Some(account_id)).await?;
+        let authorization = response.json().await?;
+        Ok(authorization)
     }
 }
 
@@ -126,6 +184,16 @@ impl Clone for Api {
     fn clone(&self) -> Self {
         Api(Arc::clone(&self.0))
     }
+}
+
+fn location_header(response: &Response) -> Result<String> {
+    Ok(response
+        .headers()
+        .get(header::LOCATION)
+        .ok_or(Error::MissingHeader("location"))?
+        .to_str()
+        .map_err(|e| Error::InvalidHeader("location", e))?
+        .to_owned())
 }
 
 #[cfg(test)]

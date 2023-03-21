@@ -1,3 +1,4 @@
+use crate::certificate::CertificateBuilder;
 use crate::{
     api::Api,
     error::Result,
@@ -116,11 +117,24 @@ fn into_account(
     })
 }
 
+/// An ACME account. This is used to identify a subscriber to an ACME server.
 #[derive(Debug)]
 pub struct Account {
     api: Api,
-    private_key: PKey<Private>,
-    id: String,
+    pub(crate) private_key: PKey<Private>,
+    pub(crate) id: String,
+}
+
+impl Account {
+    /// Get the private key for the account
+    pub fn private_key(&self) -> &PKey<Private> {
+        &self.private_key
+    }
+
+    /// Access the builder to issue a new certificate.
+    pub fn certificate(&self) -> CertificateBuilder {
+        CertificateBuilder::new(self.api.clone(), &self)
+    }
 }
 
 #[cfg(test)]
