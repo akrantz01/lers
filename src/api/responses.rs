@@ -130,7 +130,7 @@ pub struct Authorization {
 }
 
 /// The status of an authorization
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthorizationStatus {
     /// The authorization is waiting for a challenge to be successful
@@ -158,40 +158,43 @@ pub struct Challenge {
     pub status: ChallengeStatus,
     /// he time at which the server validated this challenge.
     pub validated: Option<DateTime<Utc>>,
-    #[serde(flatten)]
+    #[serde(rename = "type")]
     pub type_: ChallengeType,
+    /// A random value that uniquely identifies the challenge. We are making the assumption that all
+    /// challenge types will only use a token, just as HTTP-01, DNS-01, and TLS-ALPN-01 do.
+    pub token: String,
 }
 
-/// The possible challenges that can be returned by the server
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type")]
-#[non_exhaustive]
+/// The type of challenge that can be proposed by the server.
+///
+/// The challenges are ordered by preference if multiple solvers exist for an authorization.
+#[derive(Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ChallengeType {
+    /// When the identifier being validated is a domain name, the client can prove control of that
+    /// domain by provisioning a TXT resource record containing a designated value for a specific
+    /// validation domain name.
+    #[serde(rename = "dns-01")]
+    Dns01,
     /// With HTTP validation, the client in an ACME transaction proves its control over a domain
     /// name by proving that it can provision HTTP resources on a server accessible under that
     /// domain name.  The ACME server challenges the client to provision a file at a specific path,
     /// with a specific string as its content.
     #[serde(rename = "http-01")]
-    Http01 {
-        /// A random value that uniquely identifies the challenge.
-        token: String,
-    },
-    /// When the identifier being validated is a domain name, the client can prove control of that
-    /// domain by provisioning a TXT resource record containing a designated value for a specific
-    /// validation domain name.
-    #[serde(rename = "dns-01")]
-    Dns01 {
-        /// A random value that uniquely identifies the challenge.
-        token: String,
-    },
+    Http01,
+    /// The TLS with Application-Layer Protocol Negotiation (TLS ALPN) validation method proves
+    /// control over a domain name by requiring the ACME client to configure a TLS server to respond
+    /// to specific connection attempts using the ALPN extension with identifying information. The
+    /// ACME server validates control of the domain name by connecting to a TLS server at one of the
+    /// addresses resolved for the domain name and verifying that a certificate with specific
+    /// content is presented.
+    TlsAlpn01,
     /// The server responded with an unknown challenge type
     #[serde(other)]
     Unknown,
-    // TODO: support TLS-ALPN-01
 }
 
 /// The status of an authorization challenge
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ChallengeStatus {
     /// The challenge was created and is waiting for user action
