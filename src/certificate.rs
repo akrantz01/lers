@@ -1,7 +1,6 @@
 use crate::order::Order;
 use crate::{
     account::Account,
-    api::Api,
     error::{Error, Result},
     responses::Identifier,
 };
@@ -9,18 +8,15 @@ use chrono::{DateTime, Utc};
 
 /// Used to configure the ordering of a certificate
 pub struct CertificateBuilder<'a> {
-    api: Api,
     account: &'a Account,
-
     identifiers: Vec<Identifier>,
     not_before: Option<DateTime<Utc>>,
     not_after: Option<DateTime<Utc>>,
 }
 
 impl<'a> CertificateBuilder<'a> {
-    pub(crate) fn new(api: Api, account: &'a Account) -> CertificateBuilder<'a> {
+    pub(crate) fn new(account: &'a Account) -> CertificateBuilder<'a> {
         CertificateBuilder {
-            api,
             account,
             // We know there'll be at least 1 identifier in the order
             identifiers: Vec::with_capacity(1),
@@ -62,15 +58,14 @@ impl<'a> CertificateBuilder<'a> {
         }
 
         let order = Order::create(
-            self.api,
+            self.account,
             self.identifiers,
             self.not_before,
             self.not_after,
-            self.account,
         )
         .await?;
 
-        /// TODO: complete authorizations
+        // TODO: complete authorizations
         let _authorizations = order.authorizations().await?;
 
         Ok(())

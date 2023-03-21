@@ -120,7 +120,7 @@ fn into_account(
 /// An ACME account. This is used to identify a subscriber to an ACME server.
 #[derive(Debug)]
 pub struct Account {
-    api: Api,
+    pub(crate) api: Api,
     pub(crate) private_key: PKey<Private>,
     pub(crate) id: String,
 }
@@ -133,7 +133,7 @@ impl Account {
 
     /// Access the builder to issue a new certificate.
     pub fn certificate(&self) -> CertificateBuilder {
-        CertificateBuilder::new(self.api.clone(), &self)
+        CertificateBuilder::new(&self)
     }
 }
 

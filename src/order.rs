@@ -1,6 +1,4 @@
-use crate::responses::AuthorizationStatus;
 use crate::{
-    api::Api,
     error::Result,
     responses::{self, Identifier},
     Account,
@@ -11,7 +9,6 @@ use futures::future;
 /// A convenience wrapper around an order resource
 #[derive(Debug)]
 pub(crate) struct Order<'a> {
-    api: Api,
     account: &'a Account,
     url: String,
     inner: responses::Order,
@@ -20,13 +17,13 @@ pub(crate) struct Order<'a> {
 impl<'a> Order<'a> {
     /// Create a new order for a certificate
     pub async fn create(
-        api: Api,
+        account: &'a Account,
         identifiers: Vec<Identifier>,
         not_before: Option<DateTime<Utc>>,
         not_after: Option<DateTime<Utc>>,
-        account: &'a Account,
     ) -> Result<Order<'a>> {
-        let (url, inner) = api
+        let (url, inner) = account
+            .api
             .new_order(
                 identifiers,
                 not_before,
@@ -37,7 +34,6 @@ impl<'a> Order<'a> {
             .await?;
 
         Ok(Order {
-            api,
             account,
             url,
             inner,
@@ -50,7 +46,7 @@ impl<'a> Order<'a> {
             self.inner
                 .authorizations
                 .iter()
-                .map(|url| Authorization::fetch(self.api.clone(), &self.account, &url)),
+                .map(|url| Authorization::fetch(&self.account, &url)),
         )
         .await
     }
@@ -59,7 +55,6 @@ impl<'a> Order<'a> {
 /// A convenience wrapper around an authorization
 #[derive(Debug)]
 pub(crate) struct Authorization<'a> {
-    api: Api,
     account: &'a Account,
     url: String,
     inner: responses::Authorization,
@@ -67,13 +62,13 @@ pub(crate) struct Authorization<'a> {
 
 impl<'a> Authorization<'a> {
     /// Fetch an authorization from it's URL
-    async fn fetch(api: Api, account: &'a Account, url: &str) -> Result<Authorization<'a>> {
-        let authorization = api
+    async fn fetch(account: &'a Account, url: &str) -> Result<Authorization<'a>> {
+        let authorization = account
+            .api
             .fetch_authorization(url, &account.private_key, &account.id)
             .await?;
 
         Ok(Authorization {
-            api,
             account,
             url: url.to_owned(),
             inner: authorization,
