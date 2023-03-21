@@ -46,7 +46,7 @@ impl<'a> Order<'a> {
             self.inner
                 .authorizations
                 .iter()
-                .map(|url| Authorization::fetch(&self.account, &url)),
+                .map(|url| Authorization::fetch(self.account, url)),
         )
         .await
     }

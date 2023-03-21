@@ -119,7 +119,7 @@ impl TryFrom<Nid> for Curve {
 #[derive(Debug, Serialize)]
 #[serde(tag = "kty")]
 enum Jwk {
-    RSA { e: String, n: String },
+    Rsa { e: String, n: String },
     EC { crv: Curve, x: String, y: String },
 }
 
@@ -130,9 +130,9 @@ impl TryFrom<&PKey<Private>> for Jwk {
         match key.id() {
             Id::RSA => {
                 let rsa = key.rsa()?;
-                Ok(Jwk::RSA {
-                    e: BASE64.encode(&rsa.e().to_vec()),
-                    n: BASE64.encode(&rsa.n().to_vec()),
+                Ok(Jwk::Rsa {
+                    e: BASE64.encode(rsa.e().to_vec()),
+                    n: BASE64.encode(rsa.n().to_vec()),
                 })
             }
             Id::EC => {
@@ -150,8 +150,8 @@ impl TryFrom<&PKey<Private>> for Jwk {
                     .ok_or(Error::UnsupportedECDSACurve)?;
 
                 Ok(Jwk::EC {
-                    x: BASE64.encode(&x.to_vec()),
-                    y: BASE64.encode(&y.to_vec()),
+                    x: BASE64.encode(x.to_vec()),
+                    y: BASE64.encode(y.to_vec()),
                     crv: Curve::try_from(curve)?,
                 })
             }
@@ -162,7 +162,7 @@ impl TryFrom<&PKey<Private>> for Jwk {
 
 /// A flattened JWS Serialization ([RFC 7515 Section 7.2.2](https://www.rfc-editor.org/rfc/rfc7515#section-7.2.2))
 #[derive(Debug, Serialize)]
-pub(crate) struct JWS {
+pub(crate) struct Jws {
     protected: String,
     payload: String,
     signature: String,
@@ -175,7 +175,7 @@ pub(crate) fn sign(
     payload: &str,
     private_key: &PKey<Private>,
     account_id: Option<&str>,
-) -> Result<JWS, Error> {
+) -> Result<Jws, Error> {
     let payload = BASE64.encode(payload.as_bytes());
 
     let algorithm = Algorithm::try_from(private_key)?;
@@ -197,12 +197,12 @@ pub(crate) fn sign(
     };
 
     let protected = serde_json::to_vec(&header).unwrap();
-    let protected = BASE64.encode(&protected);
+    let protected = BASE64.encode(protected);
 
     let signature = signer(private_key, &protected, &payload)?;
-    let signature = BASE64.encode(&signature);
+    let signature = BASE64.encode(signature);
 
-    Ok(JWS {
+    Ok(Jws {
         protected,
         payload,
         signature,
@@ -254,7 +254,7 @@ mod tests {
 
         let jwk = Jwk::try_from(&key).unwrap();
 
-        let Jwk::RSA { n: n_b64, e: e_b64 } = jwk else { panic!("not rsa jwk") };
+        let Jwk::Rsa { n: n_b64, e: e_b64 } = jwk else { panic!("not rsa jwk") };
         assert_eq!(n_b64, "y2McwrH7NMy4y-0iMBTNLWIBcvLi-_i8_sTJVaIRbsAp3rYhFFx2v_79ETp3hqquU23brJjPgYV-hdcB7lwq4ssZPD2zzvzEnLfuh0Ldsnuy_oQIKGtOvb48lqZ4c094k-TFLVhApBjkdBaJ-rhb7iM1xk3SXLWb2xBrz1iXV-okfXao9N5kV0azOZ3Spfr2HPLSEDUQrg4RW01BZe3zZtKu7TJUnlICeLJd_rexMizWx8iIzYX-NayhXSSp1yeXPRfk5ZnlhrGCu6ywmhmu7QA3dou77WxN2EzAUJAoiIuxLpCSeQV4XxnDEe4o88U9_PI1f6xBKdcfR0_HeBut3w");
         assert_eq!(e_b64, "AQAB");
     }

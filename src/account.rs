@@ -133,7 +133,7 @@ impl Account {
 
     /// Access the builder to issue a new certificate.
     pub fn certificate(&self) -> CertificateBuilder {
-        CertificateBuilder::new(&self)
+        CertificateBuilder::new(self)
     }
 }
 
