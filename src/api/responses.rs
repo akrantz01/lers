@@ -19,7 +19,7 @@ pub struct Account {
 }
 
 /// The status of an account
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum AccountStatus {
     /// Account is valid and can be used
@@ -80,7 +80,7 @@ pub struct Order {
 }
 
 /// The status of an order
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum OrderStatus {
     /// The order was created
@@ -130,7 +130,7 @@ pub struct Authorization {
 }
 
 /// The status of an authorization
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthorizationStatus {
     /// The authorization is waiting for a challenge to be successful
@@ -168,7 +168,7 @@ pub struct Challenge {
 /// The type of challenge that can be proposed by the server.
 ///
 /// The challenges are ordered by preference if multiple solver exist for an authorization.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ChallengeType {
     /// When the identifier being validated is a domain name, the client can prove control of that
     /// domain by provisioning a TXT resource record containing a designated value for a specific
@@ -194,7 +194,7 @@ pub enum ChallengeType {
 }
 
 /// The status of an authorization challenge
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ChallengeStatus {
     /// The challenge was created and is waiting for user action
