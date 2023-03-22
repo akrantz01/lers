@@ -8,7 +8,7 @@ use openssl::{
     sha::{sha256, sha384, sha512},
     sign::Signer,
 };
-use serde::Serialize;
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::{
     error::Error as StdError,
     fmt::{Display, Formatter},
@@ -116,19 +116,11 @@ impl TryFrom<Nid> for Curve {
     }
 }
 
-#[derive(Debug, Serialize)]
-#[serde(tag = "kty")]
+/// The public key of a key
+#[derive(Debug)]
 enum Jwk {
-    #[serde(rename = "RSA")]
-    Rsa {
-        e: String,
-        n: String,
-    },
-    EC {
-        crv: Curve,
-        x: String,
-        y: String,
-    },
+    Rsa { e: String, n: String },
+    EC { crv: Curve, x: String, y: String },
 }
 
 impl TryFrom<&PKey<Private>> for Jwk {
@@ -165,6 +157,37 @@ impl TryFrom<&PKey<Private>> for Jwk {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+// We manually implement serialization to ensure lexicographical ordering of the fields per
+// RFC 7638 Section 3 (https://www.rfc-editor.org/rfc/rfc7638#section-3)
+impl Serialize for Jwk {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // 1 + number of fields taking into account the `kty`
+        let (fields, kty) = match self {
+            Self::Rsa { .. } => (3, "RSA"),
+            Self::EC { .. } => (4, "EC"),
+        };
+
+        let mut state = serializer.serialize_struct("Jwk", fields)?;
+        match self {
+            Self::Rsa { e, n } => {
+                state.serialize_field("e", e)?;
+                state.serialize_field("kty", kty)?;
+                state.serialize_field("n", n)?;
+            }
+            Self::EC { crv, x, y } => {
+                state.serialize_field("crv", crv)?;
+                state.serialize_field("kty", kty)?;
+                state.serialize_field("x", x)?;
+                state.serialize_field("y", y)?;
+            }
+        }
+        state.end()
     }
 }
 
@@ -324,9 +347,9 @@ mod tests {
 
         let sig = sign(JWS_URL, String::from(JWS_NONCE), JWS_PAYLOAD, &key, None).unwrap();
 
-        assert_eq!(sig.protected, "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiUlMyNTYiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0IiwiandrIjp7Imt0eSI6IlJTQSIsImUiOiJBUUFCIiwibiI6InkyTWN3ckg3Tk15NHktMGlNQlROTFdJQmN2TGktX2k4X3NUSlZhSVJic0FwM3JZaEZGeDJ2Xzc5RVRwM2hxcXVVMjNickpqUGdZVi1oZGNCN2x3cTRzc1pQRDJ6enZ6RW5MZnVoMExkc251eV9vUUlLR3RPdmI0OGxxWjRjMDk0ay1URkxWaEFwQmprZEJhSi1yaGI3aU0xeGszU1hMV2IyeEJyejFpWFYtb2tmWGFvOU41a1YwYXpPWjNTcGZyMkhQTFNFRFVRcmc0UlcwMUJaZTN6WnRLdTdUSlVubElDZUxKZF9yZXhNaXpXeDhpSXpZWC1OYXloWFNTcDF5ZVhQUmZrNVpubGhyR0N1Nnl3bWhtdTdRQTNkb3U3N1d4TjJFekFVSkFvaUl1eExwQ1NlUVY0WHhuREVlNG84OFU5X1BJMWY2eEJLZGNmUjBfSGVCdXQzdyJ9fQ");
+        assert_eq!(sig.protected, "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiUlMyNTYiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0IiwiandrIjp7ImUiOiJBUUFCIiwia3R5IjoiUlNBIiwibiI6InkyTWN3ckg3Tk15NHktMGlNQlROTFdJQmN2TGktX2k4X3NUSlZhSVJic0FwM3JZaEZGeDJ2Xzc5RVRwM2hxcXVVMjNickpqUGdZVi1oZGNCN2x3cTRzc1pQRDJ6enZ6RW5MZnVoMExkc251eV9vUUlLR3RPdmI0OGxxWjRjMDk0ay1URkxWaEFwQmprZEJhSi1yaGI3aU0xeGszU1hMV2IyeEJyejFpWFYtb2tmWGFvOU41a1YwYXpPWjNTcGZyMkhQTFNFRFVRcmc0UlcwMUJaZTN6WnRLdTdUSlVubElDZUxKZF9yZXhNaXpXeDhpSXpZWC1OYXloWFNTcDF5ZVhQUmZrNVpubGhyR0N1Nnl3bWhtdTdRQTNkb3U3N1d4TjJFekFVSkFvaUl1eExwQ1NlUVY0WHhuREVlNG84OFU5X1BJMWY2eEJLZGNmUjBfSGVCdXQzdyJ9fQ");
         assert_eq!(sig.payload, "dGhpcyBpcyBhIHRlc3QgcGF5bG9hZA");
-        assert_eq!(sig.signature, "kHMqhmTjqsGJ2QGPHZ1oXjsjB0LVHogbXXv9KRlPACK9dNJe2jAZ9lFe_XsvG9-H-0sdd0mMgHh2j3QtiZRHr-PmGpBcf_DzHUy9V5KeiX5XOYjeo8fIi_Z8BF9XMFUyWx3pi9Kjjm5EnYx3uQD9KpNjGJo0DuATREoNoNeGVH6Eh34nQ18PIEAdMz04nkkYLYUSxAUiKlB_zRc-bfCYysUJqF3IGN4n1OVNcJdRFMDLQYDWBscC7q59uSDbPTK3iOJ36TALY7S84ObPxFEr3c8XmySDzOay71oTsuZyUmjCMC_lJx3WA9ecvHcRu9Co7Cdv37NhF1LcH_lUOjsKrA");
+        assert_eq!(sig.signature, "vkUiuNTwtrHBDu69ajBQ1jhuqlIDDMnm57gwI7DQs8ljSXuSrWft8W5pUbsIe50TT6XXRmSnc3__XviADvarwhqhqJbfgr1NE66n3wUlRWc6uC7b7POaGlIs9vaWN_WfgtSzYwX6NtS5qfo4tY7hRH0wTD1R6gx3Vyb910JuA1boJNTazlD7sl6npCA5LXUQCnQQx5NHZl5vZs-xTYYQVlefgXdox-IP0qWvR1hCdTNiosFQTLIlLvF9wp13cADAplUQvynacxLQbrrn2dzSAXjCm9rPZty4lq0npvwQIQS9AaXVT7Nfbz_urIAO5Qlx89JbmFdS4VvzZdOUxk9lhA");
     }
 
     #[test]
@@ -375,15 +398,15 @@ mod tests {
 
     jws_ecdsa! {
         jws_ecdsa_p_256_without_account("testdata/ecdsa_p-256.pem", None) => {
-            protected: "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiRVMyNTYiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0IiwiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoiYkZGSkVLazBIckF5VFZ6NjlpQ2lWOEtzWDFiTndTeDYwbzZYbGF0OWhQbyIsInkiOiJmc3hrV3dzcG00TkEybFVXSWY5RHdsck9RZ2YyWTYxMHluQXdKUF9HeDBFIn19",
+            protected: "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiRVMyNTYiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0IiwiandrIjp7ImNydiI6IlAtMjU2Iiwia3R5IjoiRUMiLCJ4IjoiYkZGSkVLazBIckF5VFZ6NjlpQ2lWOEtzWDFiTndTeDYwbzZYbGF0OWhQbyIsInkiOiJmc3hrV3dzcG00TkEybFVXSWY5RHdsck9RZ2YyWTYxMHluQXdKUF9HeDBFIn19",
             payload: "dGhpcyBpcyBhIHRlc3QgcGF5bG9hZA",
         };
         jws_ecdsa_p_384_without_account("testdata/ecdsa_p-384.pem", None) => {
-            protected: "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiRVMzODQiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0IiwiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0zODQiLCJ4IjoiTURENjhUcm9za0Jjbms0OXdkN1VJMW5MSTRvOXE5REpIMFAyOWlia0FiNkF6THhnMG1JdTFVM053VVRLVWZfbCIsInkiOiJIbGRudElBekY2N05kLWpmVERhaUp4YTBXTVZIY1o1YXRfQVFreHRUNmFDdTVqUTF6U0tjUHZWbmoxU3YzSlQyIn19",
+            protected: "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiRVMzODQiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0IiwiandrIjp7ImNydiI6IlAtMzg0Iiwia3R5IjoiRUMiLCJ4IjoiTURENjhUcm9za0Jjbms0OXdkN1VJMW5MSTRvOXE5REpIMFAyOWlia0FiNkF6THhnMG1JdTFVM053VVRLVWZfbCIsInkiOiJIbGRudElBekY2N05kLWpmVERhaUp4YTBXTVZIY1o1YXRfQVFreHRUNmFDdTVqUTF6U0tjUHZWbmoxU3YzSlQyIn19",
             payload: "dGhpcyBpcyBhIHRlc3QgcGF5bG9hZA",
         };
         jws_ecdsa_p_521_without_account("testdata/ecdsa_p-521.pem", None) => {
-            protected: "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiRVM1MTIiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0IiwiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC01MjEiLCJ4IjoiQWQyN01pSmdPb2JCS0ZPX1l5QXk2bVFfRHoydUdMRjBVRDMtTWtGNGhMYTVaX19SQ3JObXRpZGpRNUZXNjR3YWhmekxlUWFtRUFfS0FUaDJ6RkJOaFNNMCIsInkiOiJBVXlnNFh1bW9iRXFhUENqVUdDOU1jOFNFMnNhVXJZVmQ4MjRJczFlcmNQanBxNVd4M0hFLUkySHZidExtbTI5VVgzVDVJa0htS1JiUElhN29COE9vNlBMIn19",
+            protected: "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiRVM1MTIiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0IiwiandrIjp7ImNydiI6IlAtNTIxIiwia3R5IjoiRUMiLCJ4IjoiQWQyN01pSmdPb2JCS0ZPX1l5QXk2bVFfRHoydUdMRjBVRDMtTWtGNGhMYTVaX19SQ3JObXRpZGpRNUZXNjR3YWhmekxlUWFtRUFfS0FUaDJ6RkJOaFNNMCIsInkiOiJBVXlnNFh1bW9iRXFhUENqVUdDOU1jOFNFMnNhVXJZVmQ4MjRJczFlcmNQanBxNVd4M0hFLUkySHZidExtbTI5VVgzVDVJa0htS1JiUElhN29COE9vNlBMIn19",
             payload: "dGhpcyBpcyBhIHRlc3QgcGF5bG9hZA",
         };
     }
