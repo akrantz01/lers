@@ -5,6 +5,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use futures::future;
+use std::cmp::Ordering;
 
 /// A convenience wrapper around an order resource
 #[derive(Debug)]
@@ -63,15 +64,37 @@ pub(crate) struct Authorization<'a> {
 impl<'a> Authorization<'a> {
     /// Fetch an authorization from it's URL
     async fn fetch(account: &'a Account, url: &str) -> Result<Authorization<'a>> {
-        let authorization = account
+        let mut authorization = account
             .api
             .fetch_authorization(url, &account.private_key, &account.id)
             .await?;
+
+        authorization.challenges.sort_by(challenge_type);
 
         Ok(Authorization {
             account,
             url: url.to_owned(),
             inner: authorization,
         })
+    }
+}
+
+fn challenge_type(a: &responses::Challenge, b: &responses::Challenge) -> Ordering {
+    use responses::ChallengeType::*;
+
+    match (a.type_, b.type_) {
+        (Dns01, Dns01) | (Http01, Http01) | (TlsAlpn01, TlsAlpn01) | (Unknown, Unknown) => {
+            Ordering::Equal
+        }
+        // prefer DNS-01 over everything
+        (Dns01, _) => Ordering::Greater,
+        // prefer HTTP-01 over everything except for DNS
+        (Http01, TlsAlpn01) | (Http01, Unknown) => Ordering::Greater,
+        (Http01, Dns01) => Ordering::Less,
+        // prefer TLS-ALPN-01 last
+        (TlsAlpn01, Unknown) => Ordering::Greater,
+        (TlsAlpn01, Http01) | (TlsAlpn01, Dns01) => Ordering::Less,
+        // never prefer unknown, we can't handle it
+        (Unknown, _) => Ordering::Less,
     }
 }
