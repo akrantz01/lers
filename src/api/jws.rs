@@ -2,7 +2,7 @@ use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
 use openssl::{
     bn::{BigNum, BigNumContext},
     ecdsa::EcdsaSig,
-    hash::MessageDigest,
+    hash::{hash, MessageDigest},
     nid::Nid,
     pkey::{Id, PKey, Private},
     sha::{sha256, sha384, sha512},
@@ -272,9 +272,19 @@ fn signer(private_key: &PKey<Private>, protected: &str, payload: &str) -> Result
     }
 }
 
+/// Generate the key authorization for the token and private key
+pub(crate) fn key_authorization(token: &str, private_key: &PKey<Private>) -> Result<String, Error> {
+    let jwk = Jwk::try_from(private_key)?;
+    let serialized = serde_json::to_vec(&jwk).unwrap();
+    let digest = hash(MessageDigest::sha256(), &serialized)?;
+    let thumbprint = BASE64.encode(digest);
+
+    Ok(format!("{token}.{thumbprint}"))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{sign, Curve, Jwk};
+    use super::{key_authorization, sign, Curve, Jwk};
     use openssl::pkey::PKey;
     use std::fs;
 
@@ -424,5 +434,33 @@ mod tests {
             protected: "eyJub25jZSI6IkEyNzJWRnB2QzFlN0gwWVoxNF8tZkxsYnQ5R2c4YlItZEd0bDBQcWp1R1hfLW84IiwiYWxnIjoiRVM1MTIiLCJ1cmwiOiJodHRwczovL2FjbWUtc3RhZ2luZy12MDIuYXBpLmxldHNlbmNyeXB0Lm9yZy9hY21lL25ldy1hY2N0Iiwia2lkIjoiMDEyMzQ1NiJ9",
             payload: "dGhpcyBpcyBhIHRlc3QgcGF5bG9hZA",
         };
+    }
+
+    macro_rules! test_key_authorization {
+        (
+            $(
+                $name:ident($key:expr) => $signature:expr
+            );+ $(;)?
+        ) => {
+            $(
+                #[test]
+                fn $name() {
+                    let pem = fs::read($key).unwrap();
+                    let key = PKey::private_key_from_pem(&pem).unwrap();
+
+                    let authorization = key_authorization("testing-token", &key).unwrap();
+                    let parts = authorization.split('.').collect::<Vec<_>>();
+                    assert_eq!(*parts.first().unwrap(), "testing-token");
+                    assert_eq!(*parts.last().unwrap(), $signature);
+                }
+            )*
+        };
+    }
+
+    test_key_authorization! {
+        key_authorization_rsa("testdata/rsa_2048.pem") => "1tYs-daa88-j-PKKVXr1fsygMDlxk5sIYgcWzLl7zU8";
+        key_authorization_ecdsa_p_256("testdata/ecdsa_p-256.pem") => "uuIRg-39HHLblKbBUmg1XIT63ZynnLhCXvLJKY9Edew";
+        key_authorization_ecdsa_p_384("testdata/ecdsa_p-384.pem") => "t4pPjjyfZL9xx_bWqd79c5ucdOLixBtukSr58OiZhjI";
+        key_authorization_ecdsa_p_521("testdata/ecdsa_p-521.pem") => "c_7slHmYt2at4zV8Em-l1_yisd2s0Exvs8XDPsX11XI";
     }
 }
