@@ -207,6 +207,14 @@ pub enum ChallengeStatus {
     Invalid,
 }
 
+/// Used for finalizing the certificate order
+#[derive(Debug, Serialize)]
+pub struct FinalizeOrder {
+    /// A CSR encoding the parameters for the certificate being requested. The CSR is sent in the
+    /// base64 URL-encoded version of the DER format.
+    pub csr: String,
+}
+
 /// Directory URLs and optional metadata
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

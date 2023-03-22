@@ -5,6 +5,9 @@ use crate::{
     responses::Identifier,
 };
 use chrono::{DateTime, Utc};
+use futures::future;
+use openssl::pkey::{PKey, Private};
+use openssl::x509::X509;
 
 /// Used to configure the ordering of a certificate
 pub struct CertificateBuilder<'a> {
@@ -12,6 +15,7 @@ pub struct CertificateBuilder<'a> {
     identifiers: Vec<Identifier>,
     not_before: Option<DateTime<Utc>>,
     not_after: Option<DateTime<Utc>>,
+    private_key: Option<PKey<Private>>,
 }
 
 impl<'a> CertificateBuilder<'a> {
@@ -22,6 +26,7 @@ impl<'a> CertificateBuilder<'a> {
             identifiers: Vec::with_capacity(1),
             not_before: None,
             not_after: None,
+            private_key: None,
         }
     }
 
@@ -51,13 +56,19 @@ impl<'a> CertificateBuilder<'a> {
         self
     }
 
+    /// Set the private key for certificate.
+    pub fn private_key(mut self, private_key: PKey<Private>) -> Self {
+        self.private_key = Some(private_key);
+        self
+    }
+
     /// Obtain the certificate
-    pub async fn obtain(self) -> Result<()> {
+    pub async fn obtain(self) -> Result<Certificate> {
         if self.identifiers.is_empty() {
             return Err(Error::MissingIdentifiers);
         }
 
-        let order = Order::create(
+        let mut order = Order::create(
             self.account,
             self.identifiers,
             self.not_before,
@@ -65,11 +76,28 @@ impl<'a> CertificateBuilder<'a> {
         )
         .await?;
 
-        // TODO: complete authorizations
-        let _authorizations = order.authorizations().await?;
+        let authorizations = order.authorizations().await?;
+        future::try_join_all(authorizations.iter().map(|a| a.solve())).await?;
 
-        Ok(())
+        order.wait_ready().await?;
+
+        let private_key = match self.private_key {
+            Some(key) => key,
+            None => PKey::ec_gen("prime256v1")?,
+        };
+        order.finalize(&private_key).await?;
+
+        order.wait_done().await?;
+
+        let chain = order.download().await?;
+        Ok(Certificate { chain })
     }
+}
+
+/// An issued certificate by the ACME server
+#[derive(Debug)]
+pub struct Certificate {
+    chain: Vec<X509>,
 }
 
 #[cfg(test)]

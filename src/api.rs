@@ -1,14 +1,20 @@
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    solver::SolverManager,
+    Solver,
+};
 use chrono::{DateTime, Utc};
 use openssl::pkey::{PKey, Private};
 use reqwest::{header, Client, Response};
 use serde::Serialize;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc, time::Duration};
+use tokio::time;
 
 mod jws;
 mod nonce;
 pub mod responses;
 
+pub(crate) use jws::key_authorization;
 pub use jws::Error as JWSError;
 use responses::ErrorType;
 
@@ -20,17 +26,24 @@ struct ApiInner {
     client: Client,
     urls: responses::Directory,
     nonces: nonce::Pool,
+    solvers: SolverManager,
 }
 
 impl Api {
     /// Construct the API for a directory from a URL
-    pub(crate) async fn from_url(url: String, client: Client, max_nonces: usize) -> Result<Api> {
+    pub(crate) async fn from_url(
+        url: String,
+        client: Client,
+        max_nonces: usize,
+        solvers: SolverManager,
+    ) -> Result<Api> {
         let urls = client.get(url).send().await?.json().await?;
 
         let inner = ApiInner {
             client,
             urls,
             nonces: nonce::Pool::new(max_nonces),
+            solvers,
         };
         Ok(Api(Arc::new(inner)))
     }
@@ -178,6 +191,99 @@ impl Api {
         let authorization = response.json().await?;
         Ok(authorization)
     }
+
+    /// Fetch a challenge
+    pub async fn fetch_challenge(
+        &self,
+        url: &str,
+        private_key: &PKey<Private>,
+        account_id: &str,
+    ) -> Result<responses::Challenge> {
+        let response = self.request(url, "", private_key, Some(account_id)).await?;
+        let challenge = response.json().await?;
+        Ok(challenge)
+    }
+
+    /// Enqueue a challenge for validation
+    pub async fn validate_challenge(
+        &self,
+        url: &str,
+        private_key: &PKey<Private>,
+        account_id: &str,
+    ) -> Result<responses::Challenge> {
+        let response = self
+            .request(url, "{}", private_key, Some(account_id))
+            .await?;
+        let challenge = response.json().await?;
+        Ok(challenge)
+    }
+
+    /// Finalize an order using the provided CSR
+    pub async fn finalize_order(
+        &self,
+        url: &str,
+        csr: String,
+        private_key: &PKey<Private>,
+        account_id: &str,
+    ) -> Result<responses::Order> {
+        let payload = responses::FinalizeOrder { csr };
+        let response = self
+            .request_json(url, &payload, private_key, Some(account_id))
+            .await?;
+        let order = response.json().await?;
+        Ok(order)
+    }
+
+    /// Download the certificate from the order
+    pub async fn download_certificate(
+        &self,
+        url: &str,
+        private_key: &PKey<Private>,
+        account_id: &str,
+    ) -> Result<String> {
+        let response = self.request(url, "", private_key, Some(account_id)).await?;
+        let certificate = response.text().await?;
+        Ok(certificate)
+    }
+
+    /// Wait until the fetched resource meets a condition or the maximum attempts are exceeded.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn wait_until<'a, F, P, T, Fut>(
+        &self,
+        fetcher: F,
+        predicate: P,
+        url: &'a str,
+        private_key: &'a PKey<Private>,
+        account_id: &'a str,
+        interval: Duration,
+        max_attempts: usize,
+    ) -> Result<T>
+    where
+        F: Fn(&'a str, &'a PKey<Private>, &'a str) -> Fut,
+        Fut: Future<Output = Result<T>>,
+        P: Fn(&T) -> bool,
+    {
+        let mut resource = fetcher(url, private_key, account_id).await?;
+        let mut attempts: usize = 0;
+
+        while !predicate(&resource) {
+            if attempts >= max_attempts {
+                return Err(Error::MaxAttemptsExceeded);
+            }
+
+            time::sleep(interval).await;
+
+            resource = fetcher(url, private_key, account_id).await?;
+            attempts += 1;
+        }
+
+        Ok(resource)
+    }
+
+    /// Get the solver for the challenge, if it exists.
+    pub fn solver_for(&self, challenge: &responses::Challenge) -> Option<&dyn Solver> {
+        self.0.solvers.get(challenge.type_)
+    }
 }
 
 impl Clone for Api {
@@ -200,12 +306,15 @@ fn location_header(response: &Response) -> Result<String> {
 mod tests {
     use super::Api;
     use crate::{
+        solver::SolverManager,
         test::{client, TEST_URL},
         LETS_ENCRYPT_STAGING_URL,
     };
 
     async fn create_api(url: String) -> Api {
-        Api::from_url(url, client(), 10).await.unwrap()
+        Api::from_url(url, client(), 10, SolverManager::default())
+            .await
+            .unwrap()
     }
 
     #[tokio::test]

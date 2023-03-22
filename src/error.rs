@@ -25,6 +25,20 @@ pub enum Error {
     InvalidAccount(responses::AccountStatus),
     /// The certificate must have at least one identifier associated with it
     MissingIdentifiers,
+    /// No solver could be found for any of the proposed challenge types
+    MissingSolver,
+    /// The solver encountered an error while presenting or cleaning up the challenge.
+    SolverFailure(Box<dyn StdError + Send + 'static>),
+    /// The maximum attempts while polling a resource was exceeded
+    MaxAttemptsExceeded,
+    /// The challenge for the identifier could not be validated
+    ChallengeFailed(responses::Identifier, responses::ChallengeType),
+    /// An error occurred within OpenSSL
+    OpenSSL(openssl::error::ErrorStack),
+    /// The order is invalid due to an error or authorization failure
+    OrderFailed(responses::Error),
+    /// The certificate cannot be downloaded due to the order state
+    CannotDownloadCertificate,
 }
 
 impl Display for Error {
@@ -45,6 +59,32 @@ impl Display for Error {
                 f,
                 "the certificate must have at least one identifier associated with it"
             ),
+            Self::MissingSolver => write!(
+                f,
+                "no solver could be found for the proposed challenge types"
+            ),
+            Self::SolverFailure(e) => write!(
+                f,
+                "the solver failed while presenting or cleaning up the challenge: {e}"
+            ),
+            Self::MaxAttemptsExceeded => write!(
+                f,
+                "the maximum attempts while polling a resource was exceeded"
+            ),
+            Self::ChallengeFailed(identifier, type_) => write!(
+                f,
+                "the {type_:?} challenge could not be validated for {identifier:?}"
+            ),
+            Self::OpenSSL(e) => write!(f, "openssl error: {e}"),
+            Self::OrderFailed(e) => write!(
+                f,
+                "the order is invalid due to an error or authorization failure: {} ({})",
+                e.type_.description(),
+                e.type_.code()
+            ),
+            Self::CannotDownloadCertificate => {
+                write!(f, "cannot download the certificate due to the order status")
+            }
         }
     }
 }
@@ -60,6 +100,13 @@ impl StdError for Error {
             Self::InvalidHeader(_, e) => Some(e),
             Self::InvalidAccount(_) => None,
             Self::MissingIdentifiers => None,
+            Self::MissingSolver => None,
+            Self::SolverFailure(e) => Some(e.as_ref()),
+            Self::MaxAttemptsExceeded => None,
+            Self::ChallengeFailed(_, _) => None,
+            Self::OpenSSL(e) => Some(e),
+            Self::OrderFailed(_) => None,
+            Self::CannotDownloadCertificate => None,
         }
     }
 }
@@ -79,5 +126,11 @@ impl From<serde_json::Error> for Error {
 impl From<JWSError> for Error {
     fn from(err: JWSError) -> Self {
         Self::JWS(err)
+    }
+}
+
+impl From<openssl::error::ErrorStack> for Error {
+    fn from(err: openssl::error::ErrorStack) -> Self {
+        Self::OpenSSL(err)
     }
 }

@@ -1,7 +1,9 @@
+use crate::solver::SolverManager;
 use crate::{
     account::{AccountBuilder, NoPrivateKey},
     api::{responses::DirectoryMeta, Api},
     error::Result,
+    Solver,
 };
 use reqwest::Client;
 
@@ -18,6 +20,7 @@ pub struct DirectoryBuilder {
     url: String,
     client: Option<Client>,
     max_nonces: usize,
+    solvers: SolverManager,
 }
 
 impl DirectoryBuilder {
@@ -27,6 +30,7 @@ impl DirectoryBuilder {
             url,
             client: None,
             max_nonces: 10,
+            solvers: SolverManager::default(),
         }
     }
 
@@ -43,6 +47,24 @@ impl DirectoryBuilder {
         self
     }
 
+    /// Set the DNS-01 solver
+    pub fn set_dns01_solver(mut self, solver: Box<dyn Solver>) -> Self {
+        self.solvers.set_dns01_solver(solver);
+        self
+    }
+
+    /// Set the HTTP-01 solver
+    pub fn set_http01_solver(mut self, solver: Box<dyn Solver>) -> Self {
+        self.solvers.set_http01_solver(solver);
+        self
+    }
+
+    /// Set the TLS-ALPN-01 solver
+    pub fn set_tls_alpn01_solver(mut self, solver: Box<dyn Solver>) -> Self {
+        self.solvers.set_tls_alpn01_solver(solver);
+        self
+    }
+
     /// Build a [`Directory`] using the given parameters.
     ///
     /// If no http client is specified, a default client will be created with
@@ -52,7 +74,7 @@ impl DirectoryBuilder {
             .client
             .unwrap_or_else(|| Client::builder().user_agent(USER_AGENT).build().unwrap());
 
-        let api = Api::from_url(self.url, client, self.max_nonces).await?;
+        let api = Api::from_url(self.url, client, self.max_nonces, self.solvers).await?;
 
         Ok(Directory(api))
     }
