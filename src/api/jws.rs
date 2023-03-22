@@ -119,8 +119,16 @@ impl TryFrom<Nid> for Curve {
 #[derive(Debug, Serialize)]
 #[serde(tag = "kty")]
 enum Jwk {
-    Rsa { e: String, n: String },
-    EC { crv: Curve, x: String, y: String },
+    #[serde(rename = "RSA")]
+    Rsa {
+        e: String,
+        n: String,
+    },
+    EC {
+        crv: Curve,
+        x: String,
+        y: String,
+    },
 }
 
 impl TryFrom<&PKey<Private>> for Jwk {
