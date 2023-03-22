@@ -130,7 +130,7 @@ pub struct Authorization {
 }
 
 /// The status of an authorization
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthorizationStatus {
     /// The authorization is waiting for a challenge to be successful
@@ -167,8 +167,8 @@ pub struct Challenge {
 
 /// The type of challenge that can be proposed by the server.
 ///
-/// The challenges are ordered by preference if multiple solvers exist for an authorization.
-#[derive(Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+/// The challenges are ordered by preference if multiple solver exist for an authorization.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ChallengeType {
     /// When the identifier being validated is a domain name, the client can prove control of that
     /// domain by provisioning a TXT resource record containing a designated value for a specific
@@ -194,7 +194,7 @@ pub enum ChallengeType {
 }
 
 /// The status of an authorization challenge
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ChallengeStatus {
     /// The challenge was created and is waiting for user action
@@ -255,7 +255,7 @@ macro_rules! error_type {
         ),+ $(,)?
     ) => {
         /// Standard error types as defined by [RFC 8555 Section 6.7](https://www.rfc-editor.org/rfc/rfc8555.html#section-6.7)
-        #[derive(Debug, Eq, PartialEq, serde::Deserialize)]
+        #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize)]
         pub enum ErrorType {
             $(
                 #[doc=$doc]
@@ -374,7 +374,7 @@ pub struct SubProblem {
 }
 
 /// Identifiers that can be present in an authorization object
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type", content = "value")]
 pub enum Identifier {
     /// A DNS identifier
