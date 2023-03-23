@@ -6,7 +6,14 @@ list:
 test: seed
   cargo test --package lers --lib tests
 
+# Lint the codebase
+lint:
+  cargo fmt --all
+  cargo clippy -- -D warnings
+  yamllint -s .
+
 alias t := test
+alias l := lint
 
 # Seed the Pebble server with test data
 seed: pebble
