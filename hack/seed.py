@@ -1,4 +1,5 @@
 import logging
+import json
 from os import environ, listdir
 from pathlib import Path
 import signal
@@ -65,7 +66,13 @@ if __name__ == "__main__":
     accounts = listdir(ACCOUNTS)
 
     wait_for_acme_server()
+
+    account_ids = []
     for a in accounts:
         client = new_client(a)
         acc = client.new_account(NewRegistration.from_data(email="test@user.com", terms_of_service_agreed=True))
-        print(acc)
+        account_ids.append(acc.uri)
+
+    print(account_ids)
+
+    json.dump(account_ids, open("testdata/account-ids.json", "w"))

@@ -1,4 +1,4 @@
-use crate::{Account, Directory};
+use crate::{Account, Directory, Solver};
 use reqwest::Client;
 
 /// The pebble test server URL
@@ -24,8 +24,7 @@ pub async fn directory() -> Directory {
 }
 
 /// Create a new account on the server
-pub async fn account() -> Account {
-    let directory = directory().await;
+pub async fn account(directory: Directory) -> Account {
     directory
         .account()
         .contacts(vec!["mailto:test@user.com".into()])

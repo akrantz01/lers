@@ -146,10 +146,9 @@ mod tests {
     use std::{collections::HashSet, fs};
 
     static ACCOUNT_IDS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| {
-        let mut seeded = HashSet::new();
-        seeded.insert("https://10.30.50.2:14000/my-account/1".into());
-        seeded.insert("https://10.30.50.2:14000/my-account/2".into());
-        Mutex::new(seeded)
+        let raw = fs::read("testdata/account-ids.json").unwrap();
+        let ids = serde_json::from_slice(&raw).unwrap();
+        Mutex::new(ids)
     });
 
     fn private_key(account: u8) -> PKey<Private> {
