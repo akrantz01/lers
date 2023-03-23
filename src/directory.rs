@@ -48,19 +48,19 @@ impl DirectoryBuilder {
     }
 
     /// Set the DNS-01 solver
-    pub fn set_dns01_solver(mut self, solver: Box<dyn Solver>) -> Self {
+    pub fn dns01_solver(mut self, solver: Box<dyn Solver>) -> Self {
         self.solvers.set_dns01_solver(solver);
         self
     }
 
     /// Set the HTTP-01 solver
-    pub fn set_http01_solver(mut self, solver: Box<dyn Solver>) -> Self {
+    pub fn http01_solver(mut self, solver: Box<dyn Solver>) -> Self {
         self.solvers.set_http01_solver(solver);
         self
     }
 
     /// Set the TLS-ALPN-01 solver
-    pub fn set_tls_alpn01_solver(mut self, solver: Box<dyn Solver>) -> Self {
+    pub fn tls_alpn01_solver(mut self, solver: Box<dyn Solver>) -> Self {
         self.solvers.set_tls_alpn01_solver(solver);
         self
     }

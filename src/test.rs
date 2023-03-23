@@ -30,7 +30,7 @@ pub async fn directory() -> Directory {
 pub async fn directory_with_http01_solver() -> Directory {
     Directory::builder(TEST_URL)
         .client(client())
-        .set_http01_solver(Box::new(EXTERNAL_HTTP01_SOLVER.clone()))
+        .http01_solver(Box::new(EXTERNAL_HTTP01_SOLVER.clone()))
         .build()
         .await
         .unwrap()
@@ -39,7 +39,7 @@ pub async fn directory_with_http01_solver() -> Directory {
 pub async fn directory_with_dns01_solver() -> Directory {
     Directory::builder(TEST_URL)
         .client(client())
-        .set_dns01_solver(Box::new(EXTERNAL_DNS01_SOLVER.clone()))
+        .dns01_solver(Box::new(EXTERNAL_DNS01_SOLVER.clone()))
         .build()
         .await
         .unwrap()
