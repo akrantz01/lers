@@ -6,8 +6,10 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use futures::future;
-use openssl::pkey::{PKey, Private};
-use openssl::x509::X509;
+use openssl::{
+    pkey::{PKey, Private},
+    x509::X509,
+};
 
 /// Used to configure the ordering of a certificate
 pub struct CertificateBuilder<'a> {
@@ -99,6 +101,52 @@ impl<'a> CertificateBuilder<'a> {
 pub struct Certificate {
     chain: Vec<X509>,
     private_key: PKey<Private>,
+}
+
+impl Certificate {
+    /// Export the private key in PEM PKCS#8 format
+    pub fn private_key_to_pem(&self) -> Result<Vec<u8>> {
+        Ok(self.private_key.private_key_to_pem_pkcs8()?)
+    }
+
+    /// Export the private key in DER format
+    pub fn private_key_to_der(&self) -> Result<Vec<u8>> {
+        Ok(self.private_key.private_key_to_der()?)
+    }
+
+    /// Export the issued certificate in PEM format
+    ///
+    /// **NOTE**: this does NOT export the full certificate chain, use
+    /// [`Certificate::fullchain_to_pem`] for that.
+    pub fn to_pem(&self) -> Result<Vec<u8>> {
+        Ok(self.chain.first().unwrap().to_pem()?)
+    }
+
+    /// Export the full certificate chain in PEM format
+    pub fn fullchain_to_pem(&self) -> Result<Vec<u8>> {
+        let mut result = Vec::new();
+        for certificate in &self.chain {
+            result.extend(certificate.to_pem()?);
+        }
+        Ok(result)
+    }
+
+    /// Export the issued certificate in DER format
+    ///
+    /// **NOTE**: this does NOT export the full certificate chain, use
+    /// [`Certificate::fullchain_to_der`] for that.
+    pub fn to_der(&self) -> Result<Vec<u8>> {
+        Ok(self.chain.first().unwrap().to_pem()?)
+    }
+
+    /// Export the full certificate chain in DER format
+    pub fn fullchain_to_der(&self) -> Result<Vec<u8>> {
+        let mut result = Vec::new();
+        for certificate in &self.chain {
+            result.extend(certificate.to_der()?);
+        }
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
