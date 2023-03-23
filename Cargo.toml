@@ -1,7 +1,15 @@
 [package]
 name = "lers"
+description = "An async, user-friendly Let's Encrypt/ACMEv2 library written in Rust"
 version = "0.1.0"
 edition = "2021"
+
+license-file = "LICENSE.md"
+homepage = "https://github.com/akrantz01/lers"
+repository = "https://github.com/akrantz01/lers"
+
+keywords = ["acme", "autocert", "letsencrypt", "tls"]
+categories = ["web-programming"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
