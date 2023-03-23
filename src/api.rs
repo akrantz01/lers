@@ -15,7 +15,6 @@ mod nonce;
 pub mod responses;
 
 pub(crate) use jws::key_authorization;
-pub use jws::Error as JWSError;
 use responses::ErrorType;
 
 #[derive(Debug)]

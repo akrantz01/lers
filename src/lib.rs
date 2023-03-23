@@ -9,7 +9,7 @@ pub mod solver;
 mod test;
 
 pub use account::{Account, AccountBuilder};
-pub use api::{responses, JWSError};
+pub use api::responses;
 pub use certificate::{Certificate, CertificateBuilder};
 pub use directory::{
     Directory, DirectoryBuilder, LETS_ENCRYPT_PRODUCTION_URL, LETS_ENCRYPT_STAGING_URL,

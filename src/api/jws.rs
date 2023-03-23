@@ -1,3 +1,4 @@
+use crate::error::{Error, Result};
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
 use openssl::{
     bn::{BigNum, BigNumContext},
@@ -9,42 +10,6 @@ use openssl::{
     sign::Signer,
 };
 use serde::{ser::SerializeStruct, Serialize, Serializer};
-use std::{
-    error::Error as StdError,
-    fmt::{Display, Formatter},
-};
-
-#[derive(Clone, Debug)]
-pub enum Error {
-    UnsupportedKeyType,
-    UnsupportedECDSACurve,
-    OpenSSL(openssl::error::ErrorStack),
-}
-
-impl StdError for Error {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match self {
-            Self::OpenSSL(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::OpenSSL(e) => write!(f, "openssl error: {e}"),
-            Self::UnsupportedKeyType => write!(f, "unsupported key type"),
-            Self::UnsupportedECDSACurve => write!(f, "unsupported ecdsa curve"),
-        }
-    }
-}
-
-impl From<openssl::error::ErrorStack> for Error {
-    fn from(error: openssl::error::ErrorStack) -> Self {
-        Error::OpenSSL(error)
-    }
-}
 
 /// Possible algorithms a JWS can be signed with. Ignores algorithms explicitly denied by
 /// [RFC 8555 Section 6.2](https://www.rfc-editor.org/rfc/rfc8555.html#section-6.2), namely:
@@ -206,7 +171,7 @@ pub(crate) fn sign(
     payload: &str,
     private_key: &PKey<Private>,
     account_id: Option<&str>,
-) -> Result<Jws, Error> {
+) -> Result<Jws> {
     let payload = BASE64.encode(payload.as_bytes());
 
     let algorithm = Algorithm::try_from(private_key)?;
@@ -241,7 +206,7 @@ pub(crate) fn sign(
 }
 
 /// Generate the signature for the protected data and message payload
-fn signer(private_key: &PKey<Private>, protected: &str, payload: &str) -> Result<Vec<u8>, Error> {
+fn signer(private_key: &PKey<Private>, protected: &str, payload: &str) -> Result<Vec<u8>> {
     let data = format!("{protected}.{payload}").into_bytes();
 
     match private_key.id() {
@@ -273,7 +238,7 @@ fn signer(private_key: &PKey<Private>, protected: &str, payload: &str) -> Result
 }
 
 /// Generate the key authorization for the token and private key
-pub(crate) fn key_authorization(token: &str, private_key: &PKey<Private>) -> Result<String, Error> {
+pub(crate) fn key_authorization(token: &str, private_key: &PKey<Private>) -> Result<String> {
     let jwk = Jwk::try_from(private_key)?;
     let serialized = serde_json::to_vec(&jwk).unwrap();
     let digest = hash(MessageDigest::sha256(), &serialized)?;
