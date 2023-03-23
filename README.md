@@ -19,6 +19,7 @@ The API and implementation were inspired by [acme2][], [acme-micro][], and [lego
 - [ ] Certificate revocation
 - [ ] [TLS-ALPN-01][] challenge implementation
 - [ ] Certificate bundling
+- [ ] [External account binding][]
 
 Contributions are welcome for any of the above features.
 
@@ -29,3 +30,4 @@ Contributions are welcome for any of the above features.
 [HTTP]: https://docs.rs/lers/latest/lers/solver/struct.Http01Solver.html
 [`Solver` trait]: https://docs.rs/lers/latest/lers/solver/trait.Solver.html
 [TLS-ALPN-01]: https://www.rfc-editor.org/rfc/rfc8737.html
+[External account binding]: https://www.rfc-editor.org/rfc/rfc8555.html#page-38
