@@ -5,7 +5,10 @@ use crate::{
     responses::{self, AccountStatus},
     Error,
 };
-use openssl::pkey::{PKey, Private};
+use openssl::{
+    pkey::{PKey, Private},
+    rsa::Rsa,
+};
 
 pub struct NoPrivateKey;
 pub struct WithPrivateKey(PKey<Private>);
@@ -56,7 +59,11 @@ impl AccountBuilder<NoPrivateKey> {
     /// Create the account if it doesn't already exists, returning the existing account if it does.
     /// Will generate a private key for the account.
     pub async fn create_if_not_exists(self) -> Result<Account> {
+        #[cfg(ossl300)]
         let key = PKey::ec_gen("prime256v1").unwrap();
+        #[cfg(not(ossl300))]
+        let key = PKey::from_rsa(Rsa::generate(2048)?)?;
+
         let (id, account) = self
             .api
             .new_account(self.contacts, self.terms_of_service_agreed, false, &key)
