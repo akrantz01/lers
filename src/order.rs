@@ -7,13 +7,12 @@ use crate::{
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
 use chrono::{DateTime, Utc};
 use futures::future;
-use openssl::x509::X509;
 use openssl::{
-    hash::MessageDigest,
+    hash::{hash, MessageDigest},
     nid::Nid,
     pkey::{PKey, Private},
     stack::Stack,
-    x509::{extension::SubjectAlternativeName, X509Name, X509Req},
+    x509::{extension::SubjectAlternativeName, X509Name, X509Req, X509},
 };
 use std::{cmp::Ordering, time::Duration};
 
@@ -109,7 +108,12 @@ impl<'a> Order<'a> {
         let order = self
             .account
             .api
-            .finalize_order(&self.url, csr, &self.account.private_key, &self.account.id)
+            .finalize_order(
+                &self.inner.finalize,
+                csr,
+                &self.account.private_key,
+                &self.account.id,
+            )
             .await?;
 
         self.inner = order;
@@ -244,7 +248,7 @@ impl<'a> Authorization<'a> {
                 .await?;
 
             solver
-                .cleanup(domain)
+                .cleanup(&challenge.token)
                 .await
                 .map_err(|e| Error::SolverFailure(e))?;
 
@@ -332,7 +336,10 @@ fn format_key_authorization(
     let authorization = key_authorization(&challenge.token, private_key)?;
 
     Ok(match challenge.type_ {
-        ChallengeType::Dns01 => BASE64.encode(authorization.into_bytes()),
+        ChallengeType::Dns01 => {
+            let digest = hash(MessageDigest::sha256(), authorization.as_bytes())?;
+            BASE64.encode(digest)
+        }
         _ => authorization,
     })
 }

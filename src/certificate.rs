@@ -90,7 +90,7 @@ impl<'a> CertificateBuilder<'a> {
         order.wait_done().await?;
 
         let chain = order.download().await?;
-        Ok(Certificate { chain })
+        Ok(Certificate { chain, private_key })
     }
 }
 
@@ -98,27 +98,174 @@ impl<'a> CertificateBuilder<'a> {
 #[derive(Debug)]
 pub struct Certificate {
     chain: Vec<X509>,
+    private_key: PKey<Private>,
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test::account, Error};
+    use crate::{
+        responses::ErrorType,
+        test::{account, directory, directory_with_dns01_solver, directory_with_http01_solver},
+        Error,
+    };
+    use openssl::x509::X509;
+
+    macro_rules! check_subjects {
+        ($cert:expr => $($name:expr),+ $(,)?) => {
+            {
+                let expected = {
+                    let mut set = std::collections::HashSet::new();
+                    $( set.insert($name.to_owned()); )+
+                    set
+                };
+                let names = $cert
+                    .subject_alt_names()
+                    .unwrap()
+                    .iter()
+                    .map(|n| n.dnsname().unwrap().to_owned())
+                    .collect::<std::collections::HashSet<_>>();
+                assert_eq!(names, expected);
+            }
+        };
+    }
+
+    /// Check that the issuer for a certificate matches the provided issuer
+    fn check_issuer(cert: &X509, issuer: &X509) {
+        assert_eq!(
+            cert.issuer_name()
+                .entries()
+                .next()
+                .unwrap()
+                .data()
+                .as_utf8()
+                .unwrap()
+                .to_string(),
+            issuer
+                .subject_name()
+                .entries()
+                .next()
+                .unwrap()
+                .data()
+                .as_utf8()
+                .unwrap()
+                .to_string()
+        );
+    }
 
     #[tokio::test]
     async fn obtain_no_identifiers() {
-        let account = account().await;
+        let directory = directory().await;
+        let account = account(directory).await;
+
         let error = account.certificate().obtain().await.unwrap_err();
         assert!(matches!(error, Error::MissingIdentifiers));
     }
 
     #[tokio::test]
-    async fn obtain_single_domain() {
-        let account = account().await;
-        let _certificate = account
+    async fn obtain_missing_solvers() {
+        let directory = directory().await;
+        let account = account(directory).await;
+
+        let error = account
             .certificate()
-            .add_domain("example.com")
+            .add_domain("domain.com")
+            .obtain()
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::MissingSolver));
+    }
+
+    #[tokio::test]
+    async fn obtain_blocked_domain() {
+        let directory = directory().await;
+        let account = account(directory).await;
+
+        let error = account
+            .certificate()
+            .add_domain("blocked-domain.example")
+            .obtain()
+            .await
+            .unwrap_err();
+
+        let Error::Server(error) = error else { panic!("expected Error::Server") };
+        assert_eq!(error.type_, ErrorType::RejectedIdentifier);
+        assert_eq!(error.status.unwrap(), 400);
+        assert!(error.detail.unwrap().contains("blocked-domain.example"));
+    }
+
+    #[tokio::test]
+    async fn obtain_single_domain() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("single.com")
             .obtain()
             .await
             .unwrap();
+
+        assert_eq!(certificate.chain.len(), 2);
+        let issued = certificate.chain.first().unwrap();
+        let issuer = certificate.chain.last().unwrap();
+
+        check_subjects!(issued => "single.com");
+        check_issuer(issued, issuer);
+    }
+
+    #[tokio::test]
+    async fn obtain_multiple_domains() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("one.multiple.com")
+            .add_domain("two.multiple.com")
+            .add_domain("three.multiple.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        assert_eq!(certificate.chain.len(), 2);
+        let issued = certificate.chain.first().unwrap();
+        let issuer = certificate.chain.last().unwrap();
+
+        check_subjects!(issued => "one.multiple.com", "two.multiple.com", "three.multiple.com");
+        check_issuer(issued, issuer);
+    }
+
+    #[tokio::test]
+    async fn obtain_wildcard() {
+        let directory = directory_with_dns01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("*.wildcard.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        assert_eq!(certificate.chain.len(), 2);
+        let issued = certificate.chain.first().unwrap();
+        let issuer = certificate.chain.last().unwrap();
+
+        check_subjects!(issued => "*.wildcard.com");
+        check_issuer(issued, issuer);
+    }
+
+    #[tokio::test]
+    async fn obtain_wildcard_without_dns01() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let error = account
+            .certificate()
+            .add_domain("*.failure.wildcard.com")
+            .obtain()
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::MissingSolver));
     }
 }
