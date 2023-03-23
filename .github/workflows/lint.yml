@@ -1,0 +1,31 @@
+---
+name: Lint
+on: push  # yamllint disable-line rule:truthy
+
+jobs:
+  formatting:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - run: cargo fmt --check --all
+
+      - name: yamllint -s -f github .
+        run: |
+          pip install yamllint
+          yamllint -s -f github .
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - run: cargo clippy -- -D warnings
