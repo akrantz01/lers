@@ -163,6 +163,8 @@ pub struct Challenge {
     /// A random value that uniquely identifies the challenge. We are making the assumption that all
     /// challenge types will only use a token, just as HTTP-01, DNS-01, and TLS-ALPN-01 do.
     pub token: String,
+    /// Error that occurred while the server was validating the challenge
+    pub error: Option<Error>,
 }
 
 /// The type of challenge that can be proposed by the server.
