@@ -156,7 +156,10 @@ mod tests {
         test::{account, directory, directory_with_dns01_solver, directory_with_http01_solver},
         Error,
     };
-    use openssl::x509::X509;
+    use openssl::{
+        pkey::{PKey, Private},
+        x509::X509,
+    };
 
     macro_rules! check_subjects {
         ($cert:expr => $($name:expr),+ $(,)?) => {
@@ -175,6 +178,11 @@ mod tests {
                 assert_eq!(names, expected);
             }
         };
+    }
+
+    fn check_key(cert: &X509, key: &PKey<Private>) {
+        let cert_key = cert.public_key().unwrap();
+        assert!(key.public_eq(&cert_key));
     }
 
     /// Check that the issuer for a certificate matches the provided issuer
@@ -259,6 +267,7 @@ mod tests {
 
         check_subjects!(issued => "single.com");
         check_issuer(issued, issuer);
+        check_key(issued, &certificate.private_key);
     }
 
     #[tokio::test]
@@ -281,6 +290,7 @@ mod tests {
 
         check_subjects!(issued => "one.multiple.com", "two.multiple.com", "three.multiple.com");
         check_issuer(issued, issuer);
+        check_key(issued, &certificate.private_key);
     }
 
     #[tokio::test]
@@ -301,6 +311,7 @@ mod tests {
 
         check_subjects!(issued => "*.wildcard.com");
         check_issuer(issued, issuer);
+        check_key(issued, &certificate.private_key);
     }
 
     #[tokio::test]
