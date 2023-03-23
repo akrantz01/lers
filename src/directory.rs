@@ -1,9 +1,8 @@
-use crate::solver::SolverManager;
 use crate::{
     account::{AccountBuilder, NoPrivateKey},
     api::{responses::DirectoryMeta, Api},
     error::Result,
-    Solver,
+    solver::{Solver, SolverManager},
 };
 use reqwest::Client;
 
