@@ -22,17 +22,17 @@ jobs:
           installer-parallel: true
 
       - name: Load cached $HOME/.local
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.local
           key: dotlocal-${{ runner.os }}-${{ hashFiles('.github/workflows/test.yml') }}
 
       - name: Load cached venv
         id: cached-poetry-dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .venv
-          key:  venv-${{ runner.os }}-${{ hashFiles('poetry.lock') }}-${{ hashFiles('.github/workflows/test.yml') }}
+          key: venv-${{ runner.os }}-${{ hashFiles('poetry.lock') }}-${{ hashFiles('.github/workflows/test.yml') }}
 
       - run: poetry install --no-interaction
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
