@@ -3,8 +3,8 @@ list:
   @just --list --unsorted
 
 # Run tests
-test: seed
-  cargo test --package lers --lib tests
+test *FLAGS: seed
+  cargo test {{FLAGS}}
 
 # Lint the codebase
 lint:
