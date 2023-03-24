@@ -7,6 +7,7 @@ mod http;
 
 use crate::responses::ChallengeType;
 #[cfg(feature = "http-01")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http-01")))]
 pub use http::{Http01Solver, Http01SolverHandle};
 
 /// Enables implementing a custom challenge solver.
