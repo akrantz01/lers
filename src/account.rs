@@ -6,8 +6,9 @@ use crate::{
     Error,
 };
 use openssl::{
+    ec::{EcGroup, EcKey},
+    nid::Nid,
     pkey::{PKey, Private},
-    rsa::Rsa,
 };
 
 pub struct NoPrivateKey;
@@ -59,10 +60,11 @@ impl AccountBuilder<NoPrivateKey> {
     /// Create the account if it doesn't already exists, returning the existing account if it does.
     /// Will generate a private key for the account.
     pub async fn create_if_not_exists(self) -> Result<Account> {
-        #[cfg(ossl300)]
-        let key = PKey::ec_gen("prime256v1").unwrap();
-        #[cfg(not(ossl300))]
-        let key = PKey::from_rsa(Rsa::generate(2048)?)?;
+        let key = {
+            let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
+            let ec = EcKey::generate(&group)?;
+            PKey::from_ec_key(ec)?
+        };
 
         let (id, account) = self
             .api
@@ -149,8 +151,9 @@ mod tests {
     use crate::{responses::ErrorType, test::directory, Error};
     use once_cell::sync::Lazy;
     use openssl::{
+        ec::{EcGroup, EcKey},
+        nid::Nid,
         pkey::{PKey, Private},
-        rsa::Rsa,
     };
     use parking_lot::Mutex;
     use std::{collections::HashSet, fs};
@@ -185,11 +188,11 @@ mod tests {
     async fn lookup_when_does_not_exists() {
         let directory = directory().await;
 
-        #[cfg(ossl300)]
-        let key = PKey::ec_gen("prime256v1").unwrap();
-        #[cfg(not(ossl300))]
-        let key = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
-
+        let key = {
+            let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
+            let ec = EcKey::generate(&group).unwrap();
+            PKey::from_ec_key(ec).unwrap()
+        };
         let result = directory
             .account()
             .contacts(vec!["mailto:does-not-exist@lookup.test".into()])

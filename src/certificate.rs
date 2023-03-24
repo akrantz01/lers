@@ -6,8 +6,9 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use futures::future;
-use openssl::rsa::Rsa;
 use openssl::{
+    ec::{EcGroup, EcKey},
+    nid::Nid,
     pkey::{PKey, Private},
     x509::X509,
 };
@@ -86,10 +87,11 @@ impl<'a> CertificateBuilder<'a> {
 
         let private_key = match self.private_key {
             Some(key) => key,
-            #[cfg(ossl300)]
-            None => PKey::ec_gen("prime256v1")?,
-            #[cfg(not(ossl300))]
-            None => PKey::from_rsa(Rsa::generate(2048)?)?,
+            None => {
+                let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
+                let ec = EcKey::generate(&group)?;
+                PKey::from_ec_key(ec)?
+            }
         };
         order.finalize(&private_key).await?;
 
