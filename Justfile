@@ -12,6 +12,10 @@ lint:
   cargo clippy -- -D warnings
   yamllint -s .
 
+# Preview generated documentation
+docs:
+  RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --open --all-features
+
 alias t := test
 alias l := lint
 
