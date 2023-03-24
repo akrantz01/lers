@@ -1,5 +1,8 @@
 # lers
 
+[![Crates.io](https://img.shields.io/crates/v/lers)](https://crates.io/crates/lers)
+[![docs.rs](https://img.shields.io/docsrs/lers/latest)](https://docs.rs/lers/latest/lers)
+
 An async, user-friendly Let's Encrypt/ACMEv2 library written in Rust.
 
 The API and implementation were inspired by [acme2][], [acme-micro][], and [lego][].
