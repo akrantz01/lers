@@ -148,7 +148,10 @@ impl Account {
 mod tests {
     use crate::{responses::ErrorType, test::directory, Error};
     use once_cell::sync::Lazy;
-    use openssl::pkey::{PKey, Private};
+    use openssl::{
+        pkey::{PKey, Private},
+        rsa::Rsa,
+    };
     use parking_lot::Mutex;
     use std::{collections::HashSet, fs};
 
@@ -182,7 +185,11 @@ mod tests {
     async fn lookup_when_does_not_exists() {
         let directory = directory().await;
 
+        #[cfg(ossl300)]
         let key = PKey::ec_gen("prime256v1").unwrap();
+        #[cfg(not(ossl300))]
+        let key = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
+
         let result = directory
             .account()
             .contacts(vec!["mailto:does-not-exist@lookup.test".into()])
