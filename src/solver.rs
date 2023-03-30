@@ -44,6 +44,14 @@ pub trait Solver {
     }
 }
 
+/// Used by [`Solver`]s to convert an arbitrary error to a boxed trait object.
+pub fn boxed_err<E>(e: E) -> Box<dyn std::error::Error + Send + 'static>
+where
+    E: std::error::Error + Send + 'static,
+{
+    Box::new(e)
+}
+
 /// Handle solving a given challenge using the configured solver(s)
 #[derive(Default)]
 pub(crate) struct SolverManager {

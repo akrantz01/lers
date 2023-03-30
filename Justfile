@@ -1,10 +1,15 @@
+set dotenv-load := true
+
 # Get a list of all the tasks
 list:
   @just --list --unsorted
 
 # Run tests
-test *FLAGS="--features dns-01": seed
-  cargo test {{FLAGS}}
+test FEATURES="dns-01" *FLAGS="": seed
+  cargo test --features {{FEATURES}} {{FLAGS}}
+
+integration-test FEATURES="dns-01,dns-01-cloudflare" *FLAGS="": seed
+  cargo test --features integration --features {{FEATURES}} {{FLAGS}}
 
 # Lint the codebase
 lint:
@@ -17,6 +22,7 @@ docs:
   RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --open --all-features
 
 alias t := test
+alias it := integration-test
 alias l := lint
 
 # Seed the Pebble server with test data

@@ -10,6 +10,8 @@ pub mod solver;
 #[cfg(test)]
 mod test;
 
+pub(crate) const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
 pub use account::{Account, AccountBuilder};
 pub use api::responses;
 pub use certificate::{Certificate, CertificateBuilder};

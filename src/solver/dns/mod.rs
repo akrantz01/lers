@@ -4,6 +4,13 @@ use trust_dns_resolver::{
     AsyncResolver, IntoName, TokioAsyncResolver,
 };
 
+#[cfg(all(feature = "dns-01-cloudflare", feature = "integration"))]
+mod cloudflare;
+
+#[cfg(feature = "dns-01-cloudflare")]
+#[cfg_attr(docsrs, doc(cfg(feature = "dns-01-cloudflare")))]
+pub use cloudflare::{CloudflareDns01Builder, CloudflareDns01Solver, CloudflareError};
+
 /// TODO: don't use global resolver to allow for better configuration
 static RESOLVER: OnceCell<TokioAsyncResolver> = OnceCell::new();
 

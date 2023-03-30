@@ -6,8 +6,6 @@ use crate::{
 };
 use reqwest::Client;
 
-const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
-
 /// The Let's Encrypt production ACMEv2 API
 pub const LETS_ENCRYPT_PRODUCTION_URL: &str = "https://acme-v02.api.letsencrypt.org/directory";
 
@@ -69,9 +67,12 @@ impl DirectoryBuilder {
     /// If no http client is specified, a default client will be created with
     /// the user-agent `lers/<version>`.
     pub async fn build(self) -> Result<Directory> {
-        let client = self
-            .client
-            .unwrap_or_else(|| Client::builder().user_agent(USER_AGENT).build().unwrap());
+        let client = self.client.unwrap_or_else(|| {
+            Client::builder()
+                .user_agent(crate::USER_AGENT)
+                .build()
+                .unwrap()
+        });
 
         let api = Api::from_url(self.url, client, self.max_nonces, self.solvers).await?;
 

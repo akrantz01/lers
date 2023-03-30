@@ -28,6 +28,11 @@ pub enum Error {
     MissingSolver,
     /// The solver encountered an error while presenting or cleaning up the challenge.
     SolverFailure(Box<dyn StdError + Send + 'static>),
+    /// The solver was configured incorrectly
+    InvalidSolverConfiguration {
+        name: &'static str,
+        error: Box<dyn StdError + Send + 'static>,
+    },
     /// The maximum attempts while polling a resource was exceeded
     MaxAttemptsExceeded,
     /// The challenge for the identifier could not be validated
@@ -69,6 +74,9 @@ impl Display for Error {
                 f,
                 "the solver failed while presenting or cleaning up the challenge: {e}"
             ),
+            Self::InvalidSolverConfiguration { name, error } => {
+                write!(f, "invalid configuration for solver {name:?}: {error}")
+            }
             Self::MaxAttemptsExceeded => write!(
                 f,
                 "the maximum attempts while polling a resource was exceeded"
@@ -105,6 +113,7 @@ impl StdError for Error {
             Self::MissingIdentifiers => None,
             Self::MissingSolver => None,
             Self::SolverFailure(e) => Some(e.as_ref()),
+            Self::InvalidSolverConfiguration { error, .. } => Some(error.as_ref()),
             Self::MaxAttemptsExceeded => None,
             Self::ChallengeFailed(_, _) => None,
             Self::OpenSSL(e) => Some(e),
