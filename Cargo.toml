@@ -18,6 +18,7 @@ default = ["http-01"]
 vendored = ["openssl/vendored", "reqwest/native-tls-vendored"]
 
 http-01 = ["hyper"]
+dns-01 = ["trust-dns-resolver"]
 
 [dependencies]
 async-trait = "0.1"
@@ -25,15 +26,16 @@ base64 = "0.21.0"
 chrono = { version = "0.4", features = ["serde"] }
 futures = { version = "0.3", default-features = false, features = ["async-await", "std"] }
 hyper = { version = "0.14", features = ["server", "tcp"], optional = true }
+once_cell = { version = "1", features = ["parking_lot"] }
 openssl = "0.10"
 parking_lot = "0.12"
 reqwest = { version = "0.11.14", default-features = false, features = ["json", "native-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.94"
 tokio = { version = "1", features = ["fs", "time"] }
+trust-dns-resolver = { version = "0.22", optional = true }
 
 [dev-dependencies]
-once_cell = { version = "1", features = ["parking_lot"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [package.metadata.docs.rs]

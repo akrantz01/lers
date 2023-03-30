@@ -3,7 +3,7 @@ list:
   @just --list --unsorted
 
 # Run tests
-test *FLAGS: seed
+test *FLAGS="--features dns-01": seed
   cargo test {{FLAGS}}
 
 # Lint the codebase

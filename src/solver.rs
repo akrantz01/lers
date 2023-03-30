@@ -1,7 +1,12 @@
-use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Formatter},
+    time::Duration,
+};
 
+#[cfg(feature = "dns-01")]
+#[cfg_attr(docsrs, doc(cfg(feature = "dns-01")))]
+pub mod dns;
 #[cfg(feature = "http-01")]
 mod http;
 
