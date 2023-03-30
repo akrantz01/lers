@@ -89,7 +89,7 @@ mod tests {
 
     #[tokio::test]
     async fn find_zone_by_fqdn_non_existent() {
-        let error = dbg!(find_zone_by_fqdn("test.lego.zz").await).unwrap_err();
+        let error = find_zone_by_fqdn("test.lego.zz").await.unwrap_err();
         assert!(matches!(
             error.kind(),
             ResolveErrorKind::NoRecordsFound { .. }
