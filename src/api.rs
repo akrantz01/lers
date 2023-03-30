@@ -245,6 +245,30 @@ impl Api {
         Ok(certificate)
     }
 
+    /// Revoke a certificate
+    ///
+    /// If the `account_key` is not `None`, the `private_key` must be that of the account. Otherwise,
+    /// it must be the certificate's private key.
+    pub async fn revoke_certificate(
+        &self,
+        certificate: String,
+        reason: Option<responses::RevocationReason>,
+        private_key: &PKey<Private>,
+        account_id: Option<&str>,
+    ) -> Result<()> {
+        self.request_json(
+            &self.0.urls.revoke_cert,
+            &responses::RevocationRequest {
+                certificate,
+                reason,
+            },
+            private_key,
+            account_id,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Wait until the fetched resource meets a condition or the maximum attempts are exceeded.
     #[allow(clippy::too_many_arguments)]
     pub async fn wait_until<'a, F, P, T, Fut>(

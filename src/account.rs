@@ -2,9 +2,10 @@ use crate::{
     api::Api,
     certificate::CertificateBuilder,
     error::Result,
-    responses::{self, AccountStatus},
-    Error,
+    responses::{self, AccountStatus, RevocationReason},
+    Certificate, Error,
 };
+use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
 use openssl::{
     ec::{EcGroup, EcKey},
     nid::Nid,
@@ -143,6 +144,26 @@ impl Account {
     /// Access the builder to issue a new certificate.
     pub fn certificate(&self) -> CertificateBuilder {
         CertificateBuilder::new(self)
+    }
+
+    /// Revoke a certificate
+    pub async fn revoke_certificate(&self, certificate: &Certificate) -> Result<()> {
+        let der = BASE64.encode(certificate.to_der()?);
+        self.api
+            .revoke_certificate(der, None, &self.private_key, Some(&self.id))
+            .await
+    }
+
+    /// Revoke a certificate with a reason.
+    pub async fn revoke_certificate_with_reason(
+        &self,
+        certificate: &Certificate,
+        reason: RevocationReason,
+    ) -> Result<()> {
+        let der = BASE64.encode(certificate.to_der()?);
+        self.api
+            .revoke_certificate(der, Some(reason), &self.private_key, Some(&self.id))
+            .await
     }
 }
 

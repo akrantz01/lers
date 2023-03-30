@@ -142,7 +142,7 @@ impl Certificate {
     /// **NOTE**: this does NOT export the full certificate chain, use
     /// [`Certificate::fullchain_to_der`] for that.
     pub fn to_der(&self) -> Result<Vec<u8>> {
-        Ok(self.chain.first().unwrap().to_pem()?)
+        Ok(self.chain.first().unwrap().to_der()?)
     }
 
     /// Export the full certificate chain in DER format
@@ -158,7 +158,7 @@ impl Certificate {
 #[cfg(test)]
 mod tests {
     use crate::{
-        responses::ErrorType,
+        responses::{ErrorType, RevocationReason},
         test::{account, directory, directory_with_dns01_solver, directory_with_http01_solver},
         Error,
     };
@@ -332,5 +332,38 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(error, Error::MissingSolver));
+    }
+
+    #[tokio::test]
+    async fn obtain_and_revoke() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("revoke.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        account.revoke_certificate(&certificate).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_revoke_with_reason() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("reason.revoke.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        account
+            .revoke_certificate_with_reason(&certificate, RevocationReason::Superseded)
+            .await
+            .unwrap();
     }
 }
