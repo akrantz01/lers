@@ -2,8 +2,10 @@ use crate::{
     account::Account,
     error::{Error, Result},
     order::Order,
-    responses::Identifier,
+    responses::{Identifier, RevocationReason},
+    Directory,
 };
+use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
 use chrono::{DateTime, Utc};
 use futures::future;
 use openssl::{
@@ -162,6 +164,28 @@ impl Certificate {
     /// Get a reference to the full [`openssl::x509::X509`] chain for the certificate.
     pub fn x509_chain(&self) -> &[X509] {
         self.chain.as_slice()
+    }
+
+    /// Revoke this certificate.
+    pub async fn revoke(&self, directory: &Directory) -> Result<()> {
+        let der = BASE64.encode(self.to_der()?);
+        directory
+            .api()
+            .revoke_certificate(der, None, &self.private_key, None)
+            .await
+    }
+
+    /// Revoke this certificate with a reason.
+    pub async fn revoke_with_reason(
+        &self,
+        directory: &Directory,
+        reason: RevocationReason,
+    ) -> Result<()> {
+        let der = BASE64.encode(self.to_der()?);
+        directory
+            .api()
+            .revoke_certificate(der, Some(reason), &self.private_key, None)
+            .await
     }
 }
 
@@ -345,7 +369,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn obtain_and_revoke() {
+    async fn obtain_and_revoke_from_account() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
 
@@ -363,7 +387,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn obtain_and_revoke_with_reason() {
+    async fn obtain_and_revoke_with_reason_from_account() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
 
@@ -376,6 +400,39 @@ mod tests {
 
         account
             .revoke_certificate_with_reason(certificate.x509(), RevocationReason::Superseded)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_revoke_from_certificate() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory.clone()).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("reason.revoke.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        certificate.revoke(&directory).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_revoke_with_reason_from_certificate() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory.clone()).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("reason.revoke.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        certificate
+            .revoke_with_reason(&directory, RevocationReason::Superseded)
             .await
             .unwrap();
     }
