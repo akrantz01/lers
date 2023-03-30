@@ -37,4 +37,4 @@ jobs:
       - run: poetry install --no-interaction
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
 
-      - run: just test --no-default-features -F http-01
+      - run: just test http-01,dns-01 --no-default-features

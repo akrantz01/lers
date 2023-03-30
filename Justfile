@@ -5,10 +5,11 @@ list:
   @just --list --unsorted
 
 # Run tests
-test FEATURES="dns-01" *FLAGS="": seed
+test FEATURES="http-01,dns-01" *FLAGS="": seed
   cargo test --features {{FEATURES}} {{FLAGS}}
 
-integration-test FEATURES="dns-01,dns-01-cloudflare" *FLAGS="": seed
+# Run integration tests
+integration-test FEATURES="http-01,dns-01,dns-01-cloudflare" *FLAGS="": seed
   cargo test --features integration --features {{FEATURES}} {{FLAGS}}
 
 # Lint the codebase
