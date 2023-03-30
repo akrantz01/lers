@@ -1,20 +1,31 @@
+//! DNS-01 solvers for various providers
+//!
+//! Currently, the following providers are supported:
+//! - [Cloudflare](https://www.cloudflare.com): [`CloudflareDns01Solver`]
+//!
+//! If you would like a provider to be supported,
+//! [file an issue](https://github.com/akrantz01/lers/issues/new?assignees=&labels=dns-01+provider&template=dns-1-provider-request.md&title=)
+//! or [make a contribution](https://github.com/akrantz01/lers/compare).
+
 use once_cell::sync::OnceCell;
 use trust_dns_resolver::{
     error::{ResolveError, ResolveErrorKind},
     AsyncResolver, IntoName, TokioAsyncResolver,
 };
 
-#[cfg(all(feature = "dns-01-cloudflare", feature = "integration"))]
+#[cfg(any(feature = "dns-01-cloudflare", feature = "integration"))]
 mod cloudflare;
 
 #[cfg(feature = "dns-01-cloudflare")]
 #[cfg_attr(docsrs, doc(cfg(feature = "dns-01-cloudflare")))]
 pub use cloudflare::{CloudflareDns01Builder, CloudflareDns01Solver, CloudflareError};
 
-/// TODO: don't use global resolver to allow for better configuration
+// TODO: don't use global resolver to allow for better configuration
 static RESOLVER: OnceCell<TokioAsyncResolver> = OnceCell::new();
 
 /// Find the zone for a FQDN.
+///
+/// This is intended for use by DNS-01 solvers to get the root zone for a FQDN.
 pub async fn find_zone_by_fqdn(fqdn: &str) -> Result<String, ResolveError> {
     let resolver = RESOLVER.get_or_try_init(|| AsyncResolver::tokio_from_system_conf())?;
 
