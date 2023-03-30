@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 /// Represents a set of metadata associated with an account.
 #[derive(Debug, Deserialize)]
@@ -255,6 +255,43 @@ pub struct DirectoryMeta {
     /// requests include an "externalAccountBinding" field associating the new account with
     /// an external account.
     pub external_account_required: Option<bool>,
+}
+
+/// Request for the [revokeCertificate](https://www.rfc-editor.org/rfc/rfc8555.html#section-7.6) operation.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RevocationRequest {
+    /// The certificate to be revoked, in the base64url-encoded version of the DER format.
+    pub certificate: String,
+    /// One of the revocation reasonCodes defined in [RFC 5280 Section 5.3.1](https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1)
+    /// to be used when generating OCSP responses and CRLs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<RevocationReason>,
+}
+
+/// Reasons a certificate could be revoked for, from [RFC 5280 Section 5.3.1](https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1).
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum RevocationReason {
+    Unspecified = 0,
+    KeyCompromise = 1,
+    CACompromise = 2,
+    AffiliationChanges = 3,
+    Superseded = 4,
+    CessationOfOperation = 5,
+    CertificateHold = 6,
+    RemoveFromCRL = 8,
+    PrivilegeWithdrawn = 9,
+    AACompromise = 10,
+}
+
+impl Serialize for RevocationReason {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
 }
 
 macro_rules! error_type {

@@ -100,6 +100,11 @@ impl Directory {
     pub fn meta(&self) -> &DirectoryMeta {
         self.0.meta()
     }
+
+    /// Get a reference to the API, only for use by actions that don't depend on an account.
+    pub(crate) fn api(&self) -> &Api {
+        &self.0
+    }
 }
 
 #[cfg(test)]

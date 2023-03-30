@@ -2,8 +2,10 @@ use crate::{
     account::Account,
     error::{Error, Result},
     order::Order,
-    responses::Identifier,
+    responses::{Identifier, RevocationReason},
+    Directory,
 };
+use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
 use chrono::{DateTime, Utc};
 use futures::future;
 use openssl::{
@@ -142,7 +144,7 @@ impl Certificate {
     /// **NOTE**: this does NOT export the full certificate chain, use
     /// [`Certificate::fullchain_to_der`] for that.
     pub fn to_der(&self) -> Result<Vec<u8>> {
-        Ok(self.chain.first().unwrap().to_pem()?)
+        Ok(self.chain.first().unwrap().to_der()?)
     }
 
     /// Export the full certificate chain in DER format
@@ -153,12 +155,44 @@ impl Certificate {
         }
         Ok(result)
     }
+
+    /// Get a reference to the underlying [`openssl::x509::X509`] instance for the certificate.
+    pub fn x509(&self) -> &X509 {
+        self.chain.first().unwrap()
+    }
+
+    /// Get a reference to the full [`openssl::x509::X509`] chain for the certificate.
+    pub fn x509_chain(&self) -> &[X509] {
+        self.chain.as_slice()
+    }
+
+    /// Revoke this certificate.
+    pub async fn revoke(&self, directory: &Directory) -> Result<()> {
+        let der = BASE64.encode(self.to_der()?);
+        directory
+            .api()
+            .revoke_certificate(der, None, &self.private_key, None)
+            .await
+    }
+
+    /// Revoke this certificate with a reason.
+    pub async fn revoke_with_reason(
+        &self,
+        directory: &Directory,
+        reason: RevocationReason,
+    ) -> Result<()> {
+        let der = BASE64.encode(self.to_der()?);
+        directory
+            .api()
+            .revoke_certificate(der, Some(reason), &self.private_key, None)
+            .await
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        responses::ErrorType,
+        responses::{ErrorType, RevocationReason},
         test::{account, directory, directory_with_dns01_solver, directory_with_http01_solver},
         Error,
     };
@@ -332,5 +366,74 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(error, Error::MissingSolver));
+    }
+
+    #[tokio::test]
+    async fn obtain_and_revoke_from_account() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("revoke.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        account
+            .revoke_certificate(certificate.x509())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_revoke_with_reason_from_account() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("reason.revoke.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        account
+            .revoke_certificate_with_reason(certificate.x509(), RevocationReason::Superseded)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_revoke_from_certificate() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory.clone()).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("reason.revoke.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        certificate.revoke(&directory).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_revoke_with_reason_from_certificate() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory.clone()).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("reason.revoke.com")
+            .obtain()
+            .await
+            .unwrap();
+
+        certificate
+            .revoke_with_reason(&directory, RevocationReason::Superseded)
+            .await
+            .unwrap();
     }
 }
