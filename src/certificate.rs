@@ -153,6 +153,16 @@ impl Certificate {
         }
         Ok(result)
     }
+
+    /// Get a reference to the underlying [`openssl::x509::X509`] instance for the certificate.
+    pub fn x509(&self) -> &X509 {
+        self.chain.first().unwrap()
+    }
+
+    /// Get a reference to the full [`openssl::x509::X509`] chain for the certificate.
+    pub fn x509_chain(&self) -> &[X509] {
+        self.chain.as_slice()
+    }
 }
 
 #[cfg(test)]
@@ -346,7 +356,10 @@ mod tests {
             .await
             .unwrap();
 
-        account.revoke_certificate(&certificate).await.unwrap();
+        account
+            .revoke_certificate(certificate.x509())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -362,7 +375,7 @@ mod tests {
             .unwrap();
 
         account
-            .revoke_certificate_with_reason(&certificate, RevocationReason::Superseded)
+            .revoke_certificate_with_reason(certificate.x509(), RevocationReason::Superseded)
             .await
             .unwrap();
     }
