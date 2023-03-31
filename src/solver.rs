@@ -1,3 +1,25 @@
+//! ACME challenge solvers
+//!
+//! There are currently two supported challenge solver types:
+//! [HTTP-01](Http01Solver) and [DNS-01](dns).
+//!
+//! ## HTTP-01
+//! The HTTP-01 solver works by making a file available containing a random token and fingerprint
+//! of your account key, proving control over the website to the CA. This is the most commonly used
+//! ACME challenge due to its ease of integration with popular web server platforms.
+//!
+//! However, it can only work over port `80` and the challenge file must be accessible on all
+//! servers resolved by the domain.
+//!
+//! ## DNS-01
+//! The DNS-01 solver works by creating a TXT record for your domain containing a random token and
+//! fingerprint of your account key, similar to the HTTP-01 challenge. This is particularly useful
+//! when you have more than one web server or port `80` is blocked. Furthermore, it is the only way
+//! to issue [wildcard certificates](https://en.wikipedia.org/wiki/Wildcard_certificate).
+//!
+//! However, you will need to deal with the potential security threat of keeping DNS API credentials
+//! on your server.
+
 use std::{
     collections::HashMap,
     fmt::{Debug, Formatter},

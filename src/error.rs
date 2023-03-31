@@ -30,7 +30,9 @@ pub enum Error {
     SolverFailure(Box<dyn StdError + Send + Sync + 'static>),
     /// The solver was configured incorrectly
     InvalidSolverConfiguration {
+        /// The solver's name
         name: &'static str,
+        /// The error propagated from the solver
         error: Box<dyn StdError + Send + Sync + 'static>,
     },
     /// The maximum attempts while polling a resource was exceeded

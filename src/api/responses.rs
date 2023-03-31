@@ -1,3 +1,5 @@
+//! ACMEv2 API requests and responses
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -173,6 +175,7 @@ pub struct Challenge {
     pub status: ChallengeStatus,
     /// he time at which the server validated this challenge.
     pub validated: Option<DateTime<Utc>>,
+    /// The type of challenge encoded in the object.
     #[serde(rename = "type")]
     pub type_: ChallengeType,
     /// A random value that uniquely identifies the challenge. We are making the assumption that all
@@ -285,18 +288,60 @@ pub struct RevocationRequest {
 }
 
 /// Reasons a certificate could be revoked for, from [RFC 5280 Section 5.3.1](https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1).
+///
+/// Definitions from [Microsoft](https://learn.microsoft.com/en-us/previous-versions/tn-archive/cc700843(v=technet.10)#revocation-reasons)
+/// and [ITU-T-X.509-201210](https://www.itu.int/rec/dologin_pub.asp?lang=e&id=T-REC-X.509-201210-S!!PDF-E&type=items).
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum RevocationReason {
+    /// It is possible to revoke a certificate without providing a specific reason code. While it
+    /// is possible to revoke a certificate with the Unspecified reason code, this is not
+    /// recommended, as it does not provide an audit trail as to why a certificate is revoked.
     Unspecified = 0,
+    /// The token or disk location where the private key associated with the certificate has been
+    /// compromised and is in the possession of an unauthorized individual. This can include the
+    /// case where a laptop is stolen, or a smart card is lost.
     KeyCompromise = 1,
+    /// The token or disk location where the CA's private key is stored has been compromised and is
+    /// in the possession of an unauthorized individual. When a CA's private key is revoked, this
+    /// results in all certificates issued by the CA that are signed using the private key
+    /// associated with the revoked certificate being considered revoked.
     CACompromise = 2,
+    /// The user has terminated his or her relationship with the organization indicated in the
+    /// Distinguished Name attribute of the certificate. This revocation code is typically used
+    /// when an individual is terminated or has resigned from an organization. You do not have to
+    /// revoke a certificate when a user changes departments, unless your security policy requires
+    /// different certificate be issued by a departmental CA.
     AffiliationChanges = 3,
+    /// A replacement certificate has been issued to a user, and the reason does not fall under the
+    /// previous reasons. This revocation reason is typically used when a smart card fails, the
+    /// password for a token is forgotten by a user, or the user has changed their legal name.
     Superseded = 4,
+    /// If a CA is decommissioned, no longer to be used, the CA's certificate should be revoked with
+    /// this reason code. Do not revoke the CA's certificate if the CA no longer issues new
+    /// certificates, yet still publishes CRLs for the currently issued certificates.
     CessationOfOperation = 5,
+    /// A temporary revocation that indicates that a CA will not vouch for a certificate at a
+    /// specific point in time. Once a certificate is revoked with a
+    /// [`RevocationReason::CertificateHold`] reason code, the certificate can then be revoked with
+    /// another [`RevocationReason`], or unrevoked and returned  to use.
+    ///
+    /// **Note**: While [`RevocationReason::CertificateHold`] allows a certificate to be
+    /// "unrevoked", it is not recommended to place a hold on a certificate, as it becomes difficult
+    /// to determine if a certificate was valid for a specific time.
     CertificateHold = 6,
+    /// If a certificate is revoked with the [`RevocationReason::CertificateHold`] reason code, it
+    /// is possible to "unrevoke" a certificate. The unrevoking process still lists the certificate
+    /// in the CRL, but with the reason code set to [`RevocationReason::RemoveFromCRL`].
+    ///
+    /// **Note**: This is specific to the [`RevocationReason::CertificateHold`] reason and is only
+    /// used in DeltaCRLs.
     RemoveFromCRL = 8,
+    /// Indicates that a certificate (public-key or attribute certificate) was revoked because a
+    /// privilege contained within that certificate has been withdrawn.
     PrivilegeWithdrawn = 9,
+    /// Indicates that it is known or suspected that aspects of the AA validated in the attribute
+    /// certificate have been compromised.
     AACompromise = 10,
 }
 
