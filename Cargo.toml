@@ -4,7 +4,7 @@ description = "An async, user-friendly Let's Encrypt/ACMEv2 library written in R
 version = "0.2.0"
 edition = "2021"
 
-license-file = "LICENSE.md"
+license = "MIT"
 homepage = "https://github.com/akrantz01/lers"
 repository = "https://github.com/akrantz01/lers"
 
