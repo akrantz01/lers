@@ -45,3 +45,11 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[[example]]
+name = "http-01"
+required-features = ["http-01"]
+
+[[example]]
+name = "dns-01"
+required-features = ["dns-01", "dns-01-cloudflare"]

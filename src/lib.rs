@@ -23,6 +23,9 @@
 //! ```no_run
 #![doc = include_str!("../examples/http-01.rs")]
 //! ```
+//!
+//! See the [examples/](https://github.com/akrantz01/lers/tree/main/examples) folder for more examples.
+//!
 
 mod account;
 mod api;
