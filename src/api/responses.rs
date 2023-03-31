@@ -1,6 +1,18 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
+/// A flattened JWS Serialization ([RFC 7515 Section 7.2.2](https://www.rfc-editor.org/rfc/rfc7515#section-7.2.2))
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Jws {
+    /// The Base64 URL-encoded JWS Protected Header
+    pub protected: String,
+    /// The Base64 URL-encoded payload of the request
+    pub payload: String,
+    /// The Base64 URL-encoded protected header and payload signature
+    pub signature: String,
+}
+
 /// Represents a set of metadata associated with an account.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
