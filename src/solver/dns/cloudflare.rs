@@ -169,16 +169,13 @@ impl Solver for CloudflareDns01Solver {
         domain: String,
         token: String,
         key_authorization: String,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let zone = super::find_zone_by_fqdn(&domain).await.map_err(boxed_err)?;
         let zone_id = self
             .zone_id_by_name(&zone)
             .await
             .map_err(boxed_err)?
-            .ok_or_else(|| {
-                Box::new(CloudflareError::UnknownZone(zone))
-                    as Box<dyn std::error::Error + Send + 'static>
-            })?;
+            .ok_or_else(|| boxed_err(CloudflareError::UnknownZone(zone)))?;
 
         let id = self
             .set_txt_record(
@@ -198,7 +195,7 @@ impl Solver for CloudflareDns01Solver {
     async fn cleanup(
         &self,
         token: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let (zone_id, record_id) = match {
             let mut tokens_to_records = self.tokens_to_records.lock();
             tokens_to_records.remove(token)

@@ -63,7 +63,7 @@ impl Solver for Http01Solver {
         domain: String,
         token: String,
         key_authorization: String,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let mut challenges = self.challenges.write();
         challenges.insert(
             token,
@@ -79,7 +79,7 @@ impl Solver for Http01Solver {
     async fn cleanup(
         &self,
         token: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let mut challenges = self.challenges.write();
         challenges.remove(token);
 

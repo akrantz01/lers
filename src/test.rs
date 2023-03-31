@@ -1,4 +1,7 @@
-use crate::{Account, Directory, Solver};
+use crate::{
+    solver::{boxed_err, Solver},
+    Account, Directory,
+};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use reqwest::Client;
@@ -89,7 +92,7 @@ impl Solver for ExternalHttp01Solver {
         domain: String,
         token: String,
         key_authorization: String,
-    ) -> Result<(), Box<dyn Error + Send + 'static>> {
+    ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         request(
             &self.client,
             ADD_A_RECORD_URL,
@@ -120,7 +123,7 @@ impl Solver for ExternalHttp01Solver {
         Ok(())
     }
 
-    async fn cleanup(&self, token: &str) -> Result<(), Box<dyn Error + Send + 'static>> {
+    async fn cleanup(&self, token: &str) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let domain = {
             let mut domains = self.domains.lock();
             domains.remove(token)
@@ -169,7 +172,7 @@ impl Solver for ExternalDns01Solver {
         domain: String,
         token: String,
         key_authorization: String,
-    ) -> Result<(), Box<dyn Error + Send + 'static>> {
+    ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         request(
             &self.client,
             ADD_DNS_01_URL,
@@ -189,7 +192,7 @@ impl Solver for ExternalDns01Solver {
         Ok(())
     }
 
-    async fn cleanup(&self, token: &str) -> Result<(), Box<dyn Error + Send + 'static>> {
+    async fn cleanup(&self, token: &str) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let domain = {
             let mut domains = self.domains.lock();
             domains.remove(token)
@@ -236,22 +239,20 @@ async fn request<S>(
     url: &str,
     body: S,
     raise_for_status: bool,
-) -> Result<(), Box<dyn Error + Send + 'static>>
+) -> Result<(), Box<dyn Error + Send + Sync + 'static>>
 where
     S: Serialize,
 {
-    let response = client.post(url).json(&body).send().await.map_err(boxed)?;
+    let response = client
+        .post(url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(boxed_err)?;
 
     if raise_for_status {
-        response.error_for_status().map_err(boxed)?;
+        response.error_for_status().map_err(boxed_err)?;
     }
 
     Ok(())
-}
-
-fn boxed<E>(err: E) -> Box<dyn Error + Send + 'static>
-where
-    E: Error + Send + 'static,
-{
-    Box::new(err)
 }

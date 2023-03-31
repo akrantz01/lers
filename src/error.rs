@@ -27,11 +27,11 @@ pub enum Error {
     /// No solver could be found for any of the proposed challenge types
     MissingSolver,
     /// The solver encountered an error while presenting or cleaning up the challenge.
-    SolverFailure(Box<dyn StdError + Send + 'static>),
+    SolverFailure(Box<dyn StdError + Send + Sync + 'static>),
     /// The solver was configured incorrectly
     InvalidSolverConfiguration {
         name: &'static str,
-        error: Box<dyn StdError + Send + 'static>,
+        error: Box<dyn StdError + Send + Sync + 'static>,
     },
     /// The maximum attempts while polling a resource was exceeded
     MaxAttemptsExceeded,

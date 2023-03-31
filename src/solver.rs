@@ -27,11 +27,13 @@ pub trait Solver {
         domain: String,
         token: String,
         key_authorization: String,
-    ) -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>;
 
     /// Used to clean-up the challenge if [`Solver::present`] ends in a non-error state.
-    async fn cleanup(&self, token: &str)
-        -> Result<(), Box<dyn std::error::Error + Send + 'static>>;
+    async fn cleanup(
+        &self,
+        token: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>;
 
     /// How many attempts to make before timing out. Defaults to 30 tries.
     fn attempts(&self) -> usize {
@@ -45,9 +47,9 @@ pub trait Solver {
 }
 
 /// Used by [`Solver`]s to convert an arbitrary error to a boxed trait object.
-pub fn boxed_err<E>(e: E) -> Box<dyn std::error::Error + Send + 'static>
+pub fn boxed_err<E>(e: E) -> Box<dyn std::error::Error + Send + Sync + 'static>
 where
-    E: std::error::Error + Send + 'static,
+    E: std::error::Error + Send + Sync + 'static,
 {
     Box::new(e)
 }
