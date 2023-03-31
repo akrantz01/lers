@@ -1,7 +1,7 @@
 [package]
 name = "lers"
 description = "An async, user-friendly Let's Encrypt/ACMEv2 library written in Rust"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 license = "MIT"
