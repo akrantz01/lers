@@ -233,7 +233,7 @@ fn signer(private_key: &PKey<Private>, protected: &str, payload: &str) -> Result
     }
 }
 
-/// Sign the provided private key with the provided HMAC and associated key ID
+/// Sign the provided private key with the provided Base64 URL-encoded HMAC and associated key ID
 pub(crate) fn sign_with_eab(
     url: &str,
     private_key: &PKey<Private>,
@@ -254,7 +254,8 @@ pub(crate) fn sign_with_eab(
 
     let data = format!("{protected}.{payload}").into_bytes();
 
-    let key = PKey::hmac(hmac.as_bytes())?;
+    let hmac = BASE64.decode(hmac)?;
+    let key = PKey::hmac(&hmac)?;
     let signature = Signer::new(MessageDigest::sha256(), &key)?.sign_oneshot_to_vec(&data)?;
     let signature = BASE64.encode(signature);
 
@@ -478,7 +479,6 @@ mod tests {
                     let key = PKey::private_key_from_pem(&pem).unwrap();
 
                     let sig = sign_with_eab(EAB_URL, &key, EAB_KID, EAB_HMAC).unwrap();
-                    dbg!(&sig);
                     assert_eq!(sig.protected, $protected);
                     assert_eq!(sig.payload, $payload);
                     assert_eq!(sig.signature, $signature);
@@ -491,22 +491,22 @@ mod tests {
         sign_with_eab_rsa("testdata/rsa_2048.pem") => {
             protected: "eyJhbGciOiJIUzI1NiIsInVybCI6Imh0dHBzOi8vMTAuMzAuNTAuMjoxNDAwMC9zaWduLW1lLXVwIiwia2lkIjoiVjZpUlIwcDMifQ",
             payload: "eyJlIjoiQVFBQiIsImt0eSI6IlJTQSIsIm4iOiJ5Mk1jd3JIN05NeTR5LTBpTUJUTkxXSUJjdkxpLV9pOF9zVEpWYUlSYnNBcDNyWWhGRngydl83OUVUcDNocXF1VTIzYnJKalBnWVYtaGRjQjdsd3E0c3NaUEQyenp2ekVuTGZ1aDBMZHNudXlfb1FJS0d0T3ZiNDhscVo0YzA5NGstVEZMVmhBcEJqa2RCYUotcmhiN2lNMXhrM1NYTFdiMnhCcnoxaVhWLW9rZlhhbzlONWtWMGF6T1ozU3BmcjJIUExTRURVUXJnNFJXMDFCWmUzelp0S3U3VEpVbmxJQ2VMSmRfcmV4TWl6V3g4aUl6WVgtTmF5aFhTU3AxeWVYUFJmazVabmxockdDdTZ5d21obXU3UUEzZG91NzdXeE4yRXpBVUpBb2lJdXhMcENTZVFWNFh4bkRFZTRvODhVOV9QSTFmNnhCS2RjZlIwX0hlQnV0M3cifQ",
-            signature: "pS69IBX9wE82sc2Wc1xWVJC2mtwrBK9693gmQiPZ0rg",
+            signature: "XXK6TYRI_-kjlMraYSXqYaIBqks2eSB9JANqt-Vv0tw",
         };
         sign_with_eab_ecdsa_p_256("testdata/ecdsa_p-256.pem") => {
             protected: "eyJhbGciOiJIUzI1NiIsInVybCI6Imh0dHBzOi8vMTAuMzAuNTAuMjoxNDAwMC9zaWduLW1lLXVwIiwia2lkIjoiVjZpUlIwcDMifQ",
             payload: "eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6ImJGRkpFS2swSHJBeVRWejY5aUNpVjhLc1gxYk53U3g2MG82WGxhdDloUG8iLCJ5IjoiZnN4a1d3c3BtNE5BMmxVV0lmOUR3bHJPUWdmMlk2MTB5bkF3SlBfR3gwRSJ9",
-            signature: "gdhi-7P0mVKvr7oJDKNCSfgYi42xInuukV1_ppMRF1I",
+            signature: "sXYXLVwqpVIx1bZngZ0ORvFR_kvETi9kFyIdFwQXlm8",
         };
         sign_with_eab_ecdsa_p_384("testdata/ecdsa_p-384.pem") => {
             protected: "eyJhbGciOiJIUzI1NiIsInVybCI6Imh0dHBzOi8vMTAuMzAuNTAuMjoxNDAwMC9zaWduLW1lLXVwIiwia2lkIjoiVjZpUlIwcDMifQ",
             payload: "eyJjcnYiOiJQLTM4NCIsImt0eSI6IkVDIiwieCI6Ik1ERDY4VHJvc2tCY25rNDl3ZDdVSTFuTEk0bzlxOURKSDBQMjlpYmtBYjZBekx4ZzBtSXUxVTNOd1VUS1VmX2wiLCJ5IjoiSGxkbnRJQXpGNjdOZC1qZlREYWlKeGEwV01WSGNaNWF0X0FRa3h0VDZhQ3U1alExelNLY1B2Vm5qMVN2M0pUMiJ9",
-            signature: "bQ5_a-hNWPxfVawMGzzDZHJxxdidbq8FaJTPTUhANe0",
+            signature: "pX34eEDN2QZL0fuRi7qJnewPo5oomVCDrZ2Y-kXSdwE",
         };
         sign_with_eab_ecdsa_p_521("testdata/ecdsa_p-521.pem") => {
             protected: "eyJhbGciOiJIUzI1NiIsInVybCI6Imh0dHBzOi8vMTAuMzAuNTAuMjoxNDAwMC9zaWduLW1lLXVwIiwia2lkIjoiVjZpUlIwcDMifQ",
             payload: "eyJjcnYiOiJQLTUyMSIsImt0eSI6IkVDIiwieCI6IkFkMjdNaUpnT29iQktGT19ZeUF5Nm1RX0R6MnVHTEYwVUQzLU1rRjRoTGE1Wl9fUkNyTm10aWRqUTVGVzY0d2FoZnpMZVFhbUVBX0tBVGgyekZCTmhTTTAiLCJ5IjoiQVV5ZzRYdW1vYkVxYVBDalVHQzlNYzhTRTJzYVVyWVZkODI0SXMxZXJjUGpwcTVXeDNIRS1JMkh2YnRMbW0yOVVYM1Q1SWtIbUtSYlBJYTdvQjhPbzZQTCJ9",
-            signature: "pQ2ZBijBncQLK9GN5gJb0aNQmfoO6yuWTMymSKMHfXo",
+            signature: "0P6pEVQ7SZJtymoLiYKELgzRHVDeZiaVEny3DobPBeM",
         };
     }
 }

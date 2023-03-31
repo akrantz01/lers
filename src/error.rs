@@ -47,6 +47,8 @@ pub enum Error {
     UnsupportedKeyType,
     /// The provided ECDSA curve is not supported
     UnsupportedECDSACurve,
+    /// The provided external account binding HMAC is not Base64 URL-encoded without padding
+    InvalidExternalAccountBindingHMAC(base64::DecodeError),
 }
 
 impl Display for Error {
@@ -97,6 +99,7 @@ impl Display for Error {
             }
             Self::UnsupportedKeyType => write!(f, "the provided key type is unsupported"),
             Self::UnsupportedECDSACurve => write!(f, "the provided ecdsa curve is unsupported"),
+            Self::InvalidExternalAccountBindingHMAC(_) => write!(f, "the provided external account binding HMAC is not Base64 URL-encoded without padding"),
         }
     }
 }
@@ -121,6 +124,7 @@ impl StdError for Error {
             Self::CannotDownloadCertificate => None,
             Self::UnsupportedKeyType => None,
             Self::UnsupportedECDSACurve => None,
+            Self::InvalidExternalAccountBindingHMAC(e) => Some(e),
         }
     }
 }
@@ -140,5 +144,11 @@ impl From<serde_json::Error> for Error {
 impl From<openssl::error::ErrorStack> for Error {
     fn from(err: openssl::error::ErrorStack) -> Self {
         Self::OpenSSL(err)
+    }
+}
+
+impl From<base64::DecodeError> for Error {
+    fn from(err: base64::DecodeError) -> Self {
+        Self::InvalidExternalAccountBindingHMAC(err)
     }
 }
