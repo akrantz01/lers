@@ -108,10 +108,23 @@ impl<'a> CertificateBuilder<'a> {
 #[derive(Debug)]
 pub struct Certificate {
     chain: Vec<X509>,
-    private_key: PKey<Private>,
+    pub(crate) private_key: PKey<Private>,
 }
 
 impl Certificate {
+    /// Load a certificate from an exported chain and private key
+    pub fn from_chain_and_private_key(chain: Format<'_>, private_key: Format<'_>) -> Result<Self> {
+        Ok(Certificate {
+            chain: chain.try_into()?,
+            private_key: private_key.try_into()?,
+        })
+    }
+
+    /// Create a certificate from an already parsed chain and private key
+    pub fn from_raw_chain_and_private_key(chain: Vec<X509>, private_key: PKey<Private>) -> Self {
+        Certificate { chain, private_key }
+    }
+
     /// Export the private key in PEM PKCS#8 format
     pub fn private_key_to_pem(&self) -> Result<Vec<u8>> {
         Ok(self.private_key.private_key_to_pem_pkcs8()?)
@@ -186,6 +199,39 @@ impl Certificate {
             .api()
             .revoke_certificate(der, Some(reason), &self.private_key, None)
             .await
+    }
+}
+
+/// The possible formats a certificate/private key can be loaded from.
+///
+/// When loading a certificate, full certificate chains can only be loaded from [`Format::Pem`].
+#[derive(Debug)]
+pub enum Format<'d> {
+    /// Bytes of a PEM encoded x509 certificate or private key
+    Pem(&'d [u8]),
+    /// Bytes of a DER encoded x509 certificate or private key
+    Der(&'d [u8]),
+}
+
+impl<'d> TryInto<Vec<X509>> for Format<'d> {
+    type Error = openssl::error::ErrorStack;
+
+    fn try_into(self) -> std::result::Result<Vec<X509>, Self::Error> {
+        match self {
+            Self::Pem(pem) => X509::stack_from_pem(pem),
+            Self::Der(der) => Ok(vec![X509::from_der(der)?]),
+        }
+    }
+}
+
+impl<'d> TryInto<PKey<Private>> for Format<'d> {
+    type Error = openssl::error::ErrorStack;
+
+    fn try_into(self) -> std::result::Result<PKey<Private>, Self::Error> {
+        match self {
+            Self::Pem(pem) => PKey::private_key_from_pem(pem),
+            Self::Der(der) => PKey::private_key_from_der(der),
+        }
     }
 }
 
@@ -435,5 +481,52 @@ mod tests {
             .revoke_with_reason(&directory, RevocationReason::Superseded)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_renew_single_domain() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("renew.me")
+            .obtain()
+            .await
+            .unwrap();
+
+        account.renew_certificate(certificate).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_renew_multiple_domains() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("one.renew.me")
+            .add_domain("two.renew.me")
+            .add_domain("three.renew.me")
+            .obtain()
+            .await
+            .unwrap();
+
+        account.renew_certificate(certificate).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_renew_wildcard_domain() {
+        let directory = directory_with_dns01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("*.renew.me")
+            .obtain()
+            .await
+            .unwrap();
+
+        account.renew_certificate(certificate).await.unwrap();
     }
 }
