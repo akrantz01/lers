@@ -1,3 +1,4 @@
+use super::responses::Jws;
 use crate::error::{Error, Result};
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
 use openssl::{
@@ -16,6 +17,8 @@ use serde::{ser::SerializeStruct, Serialize, Serializer};
 /// `none` and MAC-based algorithms.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 enum Algorithm {
+    // only for use by sign_with_eab
+    HS256,
     RS256,
     // TODO: eventually support RS384 and RS512
     ES256,
@@ -48,7 +51,8 @@ impl TryFrom<&PKey<Private>> for Algorithm {
 /// [RFC 8555 Section 6.2](https://www.rfc-editor.org/rfc/rfc8555.html#section-6.2)
 #[derive(Debug, Serialize)]
 struct Header<'h> {
-    nonce: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nonce: Option<String>,
     #[serde(rename = "alg")]
     algorithm: Algorithm,
     url: &'h str,
@@ -156,14 +160,6 @@ impl Serialize for Jwk {
     }
 }
 
-/// A flattened JWS Serialization ([RFC 7515 Section 7.2.2](https://www.rfc-editor.org/rfc/rfc7515#section-7.2.2))
-#[derive(Debug, Serialize)]
-pub(crate) struct Jws {
-    protected: String,
-    payload: String,
-    signature: String,
-}
-
 /// Create a JWS for the request
 pub(crate) fn sign(
     url: &str,
@@ -177,16 +173,16 @@ pub(crate) fn sign(
     let algorithm = Algorithm::try_from(private_key)?;
     let header = match account_id {
         Some(kid) => Header {
-            nonce,
             algorithm,
             url,
+            nonce: Some(nonce),
             kid: Some(kid),
             jwk: None,
         },
         None => Header {
-            nonce,
             algorithm,
             url,
+            nonce: Some(nonce),
             kid: None,
             jwk: Some(Jwk::try_from(private_key)?),
         },
@@ -237,6 +233,39 @@ fn signer(private_key: &PKey<Private>, protected: &str, payload: &str) -> Result
     }
 }
 
+/// Sign the provided private key with the provided Base64 URL-encoded HMAC and associated key ID
+pub(crate) fn sign_with_eab(
+    url: &str,
+    private_key: &PKey<Private>,
+    kid: &str,
+    hmac: &str,
+) -> Result<Jws> {
+    let header = Header {
+        url,
+        algorithm: Algorithm::HS256,
+        kid: Some(kid),
+        nonce: None,
+        jwk: None,
+    };
+    let protected = BASE64.encode(serde_json::to_vec(&header).unwrap());
+
+    let jwk = Jwk::try_from(private_key)?;
+    let payload = BASE64.encode(serde_json::to_vec(&jwk).unwrap());
+
+    let data = format!("{protected}.{payload}").into_bytes();
+
+    let hmac = BASE64.decode(hmac)?;
+    let key = PKey::hmac(&hmac)?;
+    let signature = Signer::new(MessageDigest::sha256(), &key)?.sign_oneshot_to_vec(&data)?;
+    let signature = BASE64.encode(signature);
+
+    Ok(Jws {
+        protected,
+        payload,
+        signature,
+    })
+}
+
 /// Generate the key authorization for the token and private key
 pub(crate) fn key_authorization(token: &str, private_key: &PKey<Private>) -> Result<String> {
     let jwk = Jwk::try_from(private_key)?;
@@ -249,7 +278,7 @@ pub(crate) fn key_authorization(token: &str, private_key: &PKey<Private>) -> Res
 
 #[cfg(test)]
 mod tests {
-    use super::{key_authorization, sign, Curve, Jwk};
+    use super::{key_authorization, sign, sign_with_eab, Curve, Jwk};
     use openssl::pkey::PKey;
     use std::fs;
 
@@ -427,5 +456,57 @@ mod tests {
         key_authorization_ecdsa_p_256("testdata/ecdsa_p-256.pem") => "uuIRg-39HHLblKbBUmg1XIT63ZynnLhCXvLJKY9Edew";
         key_authorization_ecdsa_p_384("testdata/ecdsa_p-384.pem") => "t4pPjjyfZL9xx_bWqd79c5ucdOLixBtukSr58OiZhjI";
         key_authorization_ecdsa_p_521("testdata/ecdsa_p-521.pem") => "c_7slHmYt2at4zV8Em-l1_yisd2s0Exvs8XDPsX11XI";
+    }
+
+    static EAB_URL: &str = "https://10.30.50.2:14000/sign-me-up";
+    static EAB_KID: &str = "V6iRR0p3";
+    static EAB_HMAC: &str = "zWNDZM6eQGHWpSRTPal5eIUYFTu7EajVIoguysqZ9wG44nMEtx3MUAsUDkMTQ12W";
+
+    macro_rules! test_sign_with_eab {
+        (
+            $(
+                $name:ident($file:expr) => {
+                    protected: $protected:expr,
+                    payload: $payload:expr,
+                    signature: $signature:expr,
+                }
+            );+ $(;)?
+        ) => {
+            $(
+                #[test]
+                fn $name() {
+                    let pem = fs::read($file).unwrap();
+                    let key = PKey::private_key_from_pem(&pem).unwrap();
+
+                    let sig = sign_with_eab(EAB_URL, &key, EAB_KID, EAB_HMAC).unwrap();
+                    assert_eq!(sig.protected, $protected);
+                    assert_eq!(sig.payload, $payload);
+                    assert_eq!(sig.signature, $signature);
+                }
+            )*
+        };
+    }
+
+    test_sign_with_eab! {
+        sign_with_eab_rsa("testdata/rsa_2048.pem") => {
+            protected: "eyJhbGciOiJIUzI1NiIsInVybCI6Imh0dHBzOi8vMTAuMzAuNTAuMjoxNDAwMC9zaWduLW1lLXVwIiwia2lkIjoiVjZpUlIwcDMifQ",
+            payload: "eyJlIjoiQVFBQiIsImt0eSI6IlJTQSIsIm4iOiJ5Mk1jd3JIN05NeTR5LTBpTUJUTkxXSUJjdkxpLV9pOF9zVEpWYUlSYnNBcDNyWWhGRngydl83OUVUcDNocXF1VTIzYnJKalBnWVYtaGRjQjdsd3E0c3NaUEQyenp2ekVuTGZ1aDBMZHNudXlfb1FJS0d0T3ZiNDhscVo0YzA5NGstVEZMVmhBcEJqa2RCYUotcmhiN2lNMXhrM1NYTFdiMnhCcnoxaVhWLW9rZlhhbzlONWtWMGF6T1ozU3BmcjJIUExTRURVUXJnNFJXMDFCWmUzelp0S3U3VEpVbmxJQ2VMSmRfcmV4TWl6V3g4aUl6WVgtTmF5aFhTU3AxeWVYUFJmazVabmxockdDdTZ5d21obXU3UUEzZG91NzdXeE4yRXpBVUpBb2lJdXhMcENTZVFWNFh4bkRFZTRvODhVOV9QSTFmNnhCS2RjZlIwX0hlQnV0M3cifQ",
+            signature: "XXK6TYRI_-kjlMraYSXqYaIBqks2eSB9JANqt-Vv0tw",
+        };
+        sign_with_eab_ecdsa_p_256("testdata/ecdsa_p-256.pem") => {
+            protected: "eyJhbGciOiJIUzI1NiIsInVybCI6Imh0dHBzOi8vMTAuMzAuNTAuMjoxNDAwMC9zaWduLW1lLXVwIiwia2lkIjoiVjZpUlIwcDMifQ",
+            payload: "eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6ImJGRkpFS2swSHJBeVRWejY5aUNpVjhLc1gxYk53U3g2MG82WGxhdDloUG8iLCJ5IjoiZnN4a1d3c3BtNE5BMmxVV0lmOUR3bHJPUWdmMlk2MTB5bkF3SlBfR3gwRSJ9",
+            signature: "sXYXLVwqpVIx1bZngZ0ORvFR_kvETi9kFyIdFwQXlm8",
+        };
+        sign_with_eab_ecdsa_p_384("testdata/ecdsa_p-384.pem") => {
+            protected: "eyJhbGciOiJIUzI1NiIsInVybCI6Imh0dHBzOi8vMTAuMzAuNTAuMjoxNDAwMC9zaWduLW1lLXVwIiwia2lkIjoiVjZpUlIwcDMifQ",
+            payload: "eyJjcnYiOiJQLTM4NCIsImt0eSI6IkVDIiwieCI6Ik1ERDY4VHJvc2tCY25rNDl3ZDdVSTFuTEk0bzlxOURKSDBQMjlpYmtBYjZBekx4ZzBtSXUxVTNOd1VUS1VmX2wiLCJ5IjoiSGxkbnRJQXpGNjdOZC1qZlREYWlKeGEwV01WSGNaNWF0X0FRa3h0VDZhQ3U1alExelNLY1B2Vm5qMVN2M0pUMiJ9",
+            signature: "pX34eEDN2QZL0fuRi7qJnewPo5oomVCDrZ2Y-kXSdwE",
+        };
+        sign_with_eab_ecdsa_p_521("testdata/ecdsa_p-521.pem") => {
+            protected: "eyJhbGciOiJIUzI1NiIsInVybCI6Imh0dHBzOi8vMTAuMzAuNTAuMjoxNDAwMC9zaWduLW1lLXVwIiwia2lkIjoiVjZpUlIwcDMifQ",
+            payload: "eyJjcnYiOiJQLTUyMSIsImt0eSI6IkVDIiwieCI6IkFkMjdNaUpnT29iQktGT19ZeUF5Nm1RX0R6MnVHTEYwVUQzLU1rRjRoTGE1Wl9fUkNyTm10aWRqUTVGVzY0d2FoZnpMZVFhbUVBX0tBVGgyekZCTmhTTTAiLCJ5IjoiQVV5ZzRYdW1vYkVxYVBDalVHQzlNYzhTRTJzYVVyWVZkODI0SXMxZXJjUGpwcTVXeDNIRS1JMkh2YnRMbW0yOVVYM1Q1SWtIbUtSYlBJYTdvQjhPbzZQTCJ9",
+            signature: "0P6pEVQ7SZJtymoLiYKELgzRHVDeZiaVEny3DobPBeM",
+        };
     }
 }

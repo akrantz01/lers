@@ -18,6 +18,12 @@ pub(crate) use jws::key_authorization;
 use responses::ErrorType;
 
 #[derive(Debug)]
+pub(crate) struct ExternalAccountOptions<'o> {
+    pub kid: &'o str,
+    pub hmac: &'o str,
+}
+
+#[derive(Debug)]
 pub(crate) struct Api(Arc<ApiInner>);
 
 #[derive(Debug)]
@@ -122,12 +128,20 @@ impl Api {
         contacts: Option<Vec<String>>,
         terms_of_service_agreed: bool,
         only_return_existing: bool,
+        external_account_options: Option<ExternalAccountOptions<'_>>,
         private_key: &PKey<Private>,
     ) -> Result<(String, responses::Account)> {
+        let external_account_binding = external_account_options
+            .map(|opts| {
+                jws::sign_with_eab(&self.0.urls.new_account, private_key, opts.kid, opts.hmac)
+            })
+            .transpose()?;
+
         let payload = responses::NewAccount {
             contacts,
             terms_of_service_agreed,
             only_return_existing,
+            external_account_binding,
         };
         let response = self
             .request_json(&self.0.urls.new_account, &payload, private_key, None)

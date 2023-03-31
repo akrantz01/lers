@@ -1,5 +1,5 @@
 use crate::{
-    api::Api,
+    api::{Api, ExternalAccountOptions},
     certificate::CertificateBuilder,
     error::Result,
     responses::{self, AccountStatus, RevocationReason},
@@ -17,21 +17,23 @@ pub struct NoPrivateKey;
 pub struct WithPrivateKey(PKey<Private>);
 
 /// Used to configure a the creation/lookup of an account
-pub struct AccountBuilder<T> {
+pub struct AccountBuilder<'o, T> {
     api: Api,
 
     contacts: Option<Vec<String>>,
     terms_of_service_agreed: bool,
     private_key: T,
+    external_account_options: Option<ExternalAccountOptions<'o>>,
 }
 
-impl<T> AccountBuilder<T> {
-    pub(crate) fn new(api: Api) -> AccountBuilder<NoPrivateKey> {
+impl<'o, T> AccountBuilder<'o, T> {
+    pub(crate) fn new(api: Api) -> AccountBuilder<'o, NoPrivateKey> {
         AccountBuilder {
             api,
             contacts: None,
             terms_of_service_agreed: false,
             private_key: NoPrivateKey,
+            external_account_options: None,
         }
     }
 
@@ -46,16 +48,24 @@ impl<T> AccountBuilder<T> {
         self.contacts = Some(contacts);
         self
     }
+
+    /// Set the external account credentials to bind this account to. The HMAC should be encoded
+    /// using Base64 URL-encoding without padding.
+    pub fn external_account(mut self, key_id: &'o str, hmac: &'o str) -> Self {
+        self.external_account_options = Some(ExternalAccountOptions { kid: key_id, hmac });
+        self
+    }
 }
 
-impl AccountBuilder<NoPrivateKey> {
+impl<'o> AccountBuilder<'o, NoPrivateKey> {
     /// Set the account's private key
-    pub fn private_key(self, key: PKey<Private>) -> AccountBuilder<WithPrivateKey> {
+    pub fn private_key(self, key: PKey<Private>) -> AccountBuilder<'o, WithPrivateKey> {
         AccountBuilder {
             api: self.api,
             contacts: self.contacts,
             terms_of_service_agreed: self.terms_of_service_agreed,
             private_key: WithPrivateKey(key),
+            external_account_options: self.external_account_options,
         }
     }
 
@@ -70,14 +80,20 @@ impl AccountBuilder<NoPrivateKey> {
 
         let (id, account) = self
             .api
-            .new_account(self.contacts, self.terms_of_service_agreed, false, &key)
+            .new_account(
+                self.contacts,
+                self.terms_of_service_agreed,
+                false,
+                self.external_account_options,
+                &key,
+            )
             .await?;
 
         into_account(self.api, key, id, account)
     }
 }
 
-impl AccountBuilder<WithPrivateKey> {
+impl<'o> AccountBuilder<'o, WithPrivateKey> {
     /// Lookup the account by private key, fails if it doesn't exist or a private key was
     /// not specified.
     pub async fn lookup(self) -> Result<Account> {
@@ -87,6 +103,7 @@ impl AccountBuilder<WithPrivateKey> {
                 self.contacts,
                 self.terms_of_service_agreed,
                 true,
+                self.external_account_options,
                 &self.private_key.0,
             )
             .await?;
@@ -102,6 +119,7 @@ impl AccountBuilder<WithPrivateKey> {
                 self.contacts,
                 self.terms_of_service_agreed,
                 false,
+                self.external_account_options,
                 &self.private_key.0,
             )
             .await?;
@@ -262,5 +280,49 @@ mod tests {
 
         let mut ids = ACCOUNT_IDS.lock();
         assert!(!ids.insert(account.id));
+    }
+
+    #[tokio::test]
+    async fn create_if_not_exists_with_external_account() {
+        let directory = directory().await;
+        let account = directory
+            .account()
+            .terms_of_service_agreed(true)
+            .contacts(vec!["mailto:external-account@create.test".into()])
+            .external_account(
+                "V6iRR0p3",
+                "zWNDZM6eQGHWpSRTPal5eIUYFTu7EajVIoguysqZ9wG44nMEtx3MUAsUDkMTQ12W",
+            )
+            .create_if_not_exists()
+            .await
+            .unwrap();
+
+        let mut ids = ACCOUNT_IDS.lock();
+        assert!(ids.insert(account.id));
+    }
+
+    #[tokio::test]
+    async fn create_if_not_exists_with_non_existent_external_account() {
+        let directory = directory().await;
+        let result = directory
+            .account()
+            .terms_of_service_agreed(true)
+            .contacts(vec!["mailto:external-account@create.test".into()])
+            .external_account(
+                "this-does-not-exist",
+                "zWNDZM6eQGHWpSRTPal5eIUYFTu7EajVIoguysqZ9wG44nMEtx3MUAsUDkMTQ12W",
+            )
+            .create_if_not_exists()
+            .await;
+
+        let Error::Server(error) = result.unwrap_err() else { panic!("must be server error") };
+        assert_eq!(error.type_, ErrorType::Unauthorized);
+        assert_eq!(error.title, None);
+        assert_eq!(
+            error.detail,
+            Some("the field 'kid' references a key that is not known to the ACME server".into())
+        );
+        assert_eq!(error.status, Some(403));
+        assert!(error.subproblems.is_none());
     }
 }

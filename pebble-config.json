@@ -8,6 +8,9 @@
     "tlsPort": 5003,
     "ocspResponderURL": "",
     "externalAccountBindingRequired": false,
+    "externalAccountMACKeys": {
+      "V6iRR0p3": "zWNDZM6eQGHWpSRTPal5eIUYFTu7EajVIoguysqZ9wG44nMEtx3MUAsUDkMTQ12W"
+    },
     "domainBlocklist": ["blocked-domain.example"]
   }
 }

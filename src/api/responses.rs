@@ -1,6 +1,18 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
+/// A flattened JWS Serialization ([RFC 7515 Section 7.2.2](https://www.rfc-editor.org/rfc/rfc7515#section-7.2.2))
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Jws {
+    /// The Base64 URL-encoded JWS Protected Header
+    pub protected: String,
+    /// The Base64 URL-encoded payload of the request
+    pub payload: String,
+    /// The Base64 URL-encoded protected header and payload signature
+    pub signature: String,
+}
+
 /// Represents a set of metadata associated with an account.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +57,10 @@ pub struct NewAccount {
     /// If `true`, the server will not create a new account if one does not exist. This allows a
     /// client to look up an account URL based on an account key
     pub only_return_existing: bool,
-    // TODO: support externalAccountBinding (https://www.rfc-editor.org/rfc/rfc8555.html#section-7.3.4)
+    /// Including this field in a newAccount request indicates approval by the holder of an existing
+    /// non-ACME account to bind that account to this ACME account.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_account_binding: Option<Jws>,
 }
 
 /// Represents a client's request for a certificate that is used to track the progress of that order

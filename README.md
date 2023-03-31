@@ -20,10 +20,10 @@ The API and implementation were inspired by [acme2][], [acme-micro][], and [lego
 ### Missing features
 
 - [ ] Certificate renewal
-- [x] Certificate revocation
+- [x] Certificate revocation (akrantz01/lers#3)
 - [ ] [TLS-ALPN-01][] challenge implementation
 - [ ] Certificate bundling
-- [ ] [External account binding][]
+- [x] [External account binding][] (akrantz01/lers#4)
 
 Contributions are welcome for any of the above features.
 
