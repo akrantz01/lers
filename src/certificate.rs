@@ -108,7 +108,7 @@ impl<'a> CertificateBuilder<'a> {
 #[derive(Debug)]
 pub struct Certificate {
     chain: Vec<X509>,
-    private_key: PKey<Private>,
+    pub(crate) private_key: PKey<Private>,
 }
 
 impl Certificate {
@@ -435,5 +435,52 @@ mod tests {
             .revoke_with_reason(&directory, RevocationReason::Superseded)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_renew_single_domain() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("renew.me")
+            .obtain()
+            .await
+            .unwrap();
+
+        account.renew_certificate(certificate).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_renew_multiple_domains() {
+        let directory = directory_with_http01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("one.renew.me")
+            .add_domain("two.renew.me")
+            .add_domain("three.renew.me")
+            .obtain()
+            .await
+            .unwrap();
+
+        account.renew_certificate(certificate).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn obtain_and_renew_wildcard_domain() {
+        let directory = directory_with_dns01_solver().await;
+        let account = account(directory).await;
+
+        let certificate = account
+            .certificate()
+            .add_domain("*.renew.me")
+            .obtain()
+            .await
+            .unwrap();
+
+        account.renew_certificate(certificate).await.unwrap();
     }
 }

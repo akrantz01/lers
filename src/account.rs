@@ -1,6 +1,6 @@
 use crate::{
     api::{Api, ExternalAccountOptions},
-    certificate::CertificateBuilder,
+    certificate::{Certificate, CertificateBuilder},
     error::Result,
     responses::{self, AccountStatus, RevocationReason},
     Error,
@@ -12,6 +12,7 @@ use openssl::{
     pkey::{PKey, Private},
     x509::X509,
 };
+use std::collections::HashSet;
 
 pub struct NoPrivateKey;
 pub struct WithPrivateKey(PKey<Private>);
@@ -163,6 +164,39 @@ impl Account {
     /// Access the builder to issue a new certificate.
     pub fn certificate(&self) -> CertificateBuilder {
         CertificateBuilder::new(self)
+    }
+
+    /// Renew a certificate
+    pub async fn renew_certificate(&self, certificate: Certificate) -> Result<Certificate> {
+        let inner = certificate.x509();
+        let mut domains = HashSet::new();
+
+        // Extract the common name
+        if let Some(name) = inner
+            .subject_name()
+            .entries()
+            .find(|e| e.object().nid() == Nid::COMMONNAME)
+        {
+            let domain = name.data().as_utf8()?.to_string();
+            domains.insert(domain);
+        }
+
+        // Extract any SANs
+        if let Some(alt_names) = inner.subject_alt_names() {
+            for name in alt_names {
+                if let Some(domain) = name.dnsname() {
+                    domains.insert(domain.to_owned());
+                }
+            }
+        }
+
+        // Build the request
+        let mut builder = self.certificate().private_key(certificate.private_key);
+        for domain in domains.into_iter() {
+            builder = builder.add_domain(domain);
+        }
+
+        builder.obtain().await
     }
 
     /// Revoke a certificate
