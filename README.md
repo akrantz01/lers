@@ -11,6 +11,7 @@ The API and implementation were inspired by [acme2][], [acme-micro][], and [lego
 - ACME v2 ([RFC 8555][])
 - Register with CA
 - Obtain certificates
+- Renew certificates
 - Revoke certificates
 - Robust implementation of ACME challenges
   - [HTTP][] (http-01)
@@ -21,7 +22,6 @@ The API and implementation were inspired by [acme2][], [acme-micro][], and [lego
 
 ### Missing features
 
-- [ ] Certificate renewal
 - [ ] [TLS-ALPN-01][] challenge implementation
 - [ ] Certificate bundling
 
