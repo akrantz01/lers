@@ -57,7 +57,10 @@ pub struct NewAccount {
     /// If `true`, the server will not create a new account if one does not exist. This allows a
     /// client to look up an account URL based on an account key
     pub only_return_existing: bool,
-    // TODO: support externalAccountBinding (https://www.rfc-editor.org/rfc/rfc8555.html#section-7.3.4)
+    /// Including this field in a newAccount request indicates approval by the holder of an existing
+    /// non-ACME account to bind that account to this ACME account.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_account_binding: Option<Jws>,
 }
 
 /// Represents a client's request for a certificate that is used to track the progress of that order
