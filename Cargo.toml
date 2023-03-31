@@ -39,6 +39,7 @@ tokio = { version = "1", features = ["fs", "time"] }
 trust-dns-resolver = { version = "0.22", optional = true }
 
 [dev-dependencies]
+anyhow = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [package.metadata.docs.rs]
