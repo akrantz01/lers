@@ -243,7 +243,7 @@ pub(crate) fn sign_with_eab(
     let header = Header {
         url,
         algorithm: Algorithm::HS256,
-        kid: Some(&kid),
+        kid: Some(kid),
         nonce: None,
         jwk: None,
     };
