@@ -13,8 +13,6 @@ impl std::error::Error for Error {
         match *self {
             Error::Normal(ref e) => std::error::Error::source(e),
             Error::Ssl(ref e, _) => std::error::Error::source(e),
-            Error::EmptyChain => None,
-            Error::NotPkcs8 => None,
         }
     }
 }
@@ -25,11 +23,6 @@ impl Display for Error {
             Error::Normal(ref e) => Display::fmt(e, f),
             Error::Ssl(ref e, X509VerifyResult::OK) => Display::fmt(e, f),
             Error::Ssl(ref e, v) => write!(f, "{} ({})", e, v),
-            Error::EmptyChain => write!(
-                f,
-                "at least one certificate must be provided to create an identity"
-            ),
-            Error::NotPkcs8 => write!(f, "expected PKCS#8 PEM"),
         }
     }
 }
