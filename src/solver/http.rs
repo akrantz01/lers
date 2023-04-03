@@ -1,22 +1,20 @@
-use super::Solver;
+use super::{
+    common::{ChallengeAuthorization, Challenges, SolverHandle},
+    Solver,
+};
 use hyper::{
     header,
     server::{conn::AddrIncoming, Builder, Server},
     service::Service,
     Body, Method, Request, Response, StatusCode,
 };
-use parking_lot::RwLock;
 use std::{
-    collections::HashMap,
     future::Future,
     net::{SocketAddr, TcpListener},
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
 };
-use tokio::{sync::oneshot, task::JoinHandle};
-
-type Challenges = Arc<RwLock<HashMap<String, ChallengeAuthorization>>>;
+use tokio::sync::oneshot;
 
 /// A bare-bones implementation of a solver for the HTTP-01 challenge.
 #[derive(Clone, Debug, Default)]
@@ -31,25 +29,28 @@ impl Http01Solver {
     }
 
     /// Start the solver in a separate task listening on the given address
-    pub fn start(&self, address: &SocketAddr) -> hyper::Result<Http01SolverHandle> {
+    pub fn start(&self, address: &SocketAddr) -> hyper::Result<SolverHandle<hyper::Error>> {
         let builder = Server::try_bind(address)?;
         Ok(self.launch(builder))
     }
 
     /// Start the solver in a separate task using the given listener
-    pub fn start_with_listener(&self, listener: TcpListener) -> hyper::Result<Http01SolverHandle> {
+    pub fn start_with_listener(
+        &self,
+        listener: TcpListener,
+    ) -> hyper::Result<SolverHandle<hyper::Error>> {
         let builder = Server::from_tcp(listener)?;
         Ok(self.launch(builder))
     }
 
-    fn launch(&self, builder: Builder<AddrIncoming>) -> Http01SolverHandle {
+    fn launch(&self, builder: Builder<AddrIncoming>) -> SolverHandle<hyper::Error> {
         let (tx, rx) = oneshot::channel();
 
         let server = builder
             .serve(MakeSvc(self.challenges.clone()))
             .with_graceful_shutdown(async { rx.await.unwrap() });
 
-        Http01SolverHandle {
+        SolverHandle {
             handle: tokio::spawn(server),
             tx,
         }
@@ -85,26 +86,6 @@ impl Solver for Http01Solver {
 
         Ok(())
     }
-}
-
-/// A handle to stop the solver server once started.
-pub struct Http01SolverHandle {
-    handle: JoinHandle<hyper::Result<()>>,
-    tx: oneshot::Sender<()>,
-}
-
-impl Http01SolverHandle {
-    /// Stop the server
-    pub async fn stop(self) -> hyper::Result<()> {
-        self.tx.send(()).unwrap();
-        self.handle.await.unwrap()
-    }
-}
-
-#[derive(Debug)]
-struct ChallengeAuthorization {
-    domain: String,
-    key_authorization: String,
 }
 
 struct SolverService(Challenges);
@@ -184,7 +165,7 @@ impl<T> Service<T> for MakeSvc {
 
 #[cfg(test)]
 mod tests {
-    use super::{Http01Solver, Http01SolverHandle, Solver};
+    use super::{Http01Solver, Solver, SolverHandle};
     use reqwest::{header, Client, StatusCode};
     use std::net::{SocketAddr, TcpListener};
 
@@ -199,7 +180,7 @@ mod tests {
     const TOKEN: &str = "testing-token";
     const KEY_AUTHZ: &str = "testing-key-authorization";
 
-    fn solver() -> (Http01Solver, Http01SolverHandle, SocketAddr) {
+    fn solver() -> (Http01Solver, SolverHandle<hyper::Error>, SocketAddr) {
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let addr = listener.local_addr().unwrap();
 

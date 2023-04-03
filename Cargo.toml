@@ -19,6 +19,7 @@ vendored = ["openssl/vendored", "reqwest/native-tls-vendored"]
 
 http-01 = ["hyper"]
 dns-01 = ["trust-dns-resolver"]
+tls-alpn-01 = []
 dns-01-cloudflare = ["dns-01"]
 
 integration = []
