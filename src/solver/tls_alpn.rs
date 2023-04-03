@@ -5,6 +5,11 @@ use super::{
 use std::{io, net::SocketAddr};
 use tokio::net::TcpListener;
 
+mod error;
+#[cfg(test)]
+mod smoke;
+mod stream;
+
 /// A bare-bones implementation of a solver for the TLS-ALPN-01 challenge.
 #[derive(Clone, Debug, Default)]
 pub struct TlsAlpn01Solver {
