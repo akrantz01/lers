@@ -6,6 +6,7 @@ use crate::{
     Error,
 };
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
+use openssl::hash::MessageDigest;
 use openssl::{
     ec::{EcGroup, EcKey},
     nid::Nid,
@@ -215,7 +216,7 @@ impl Account {
         name = "Account::renew_certificate",
         err,
         skip_all,
-        fields(self.id),
+        fields(self.id, certificate = %certificate.digest()),
     )]
     pub async fn renew_certificate(&self, certificate: Certificate) -> Result<Certificate> {
         let inner = certificate.x509();
@@ -255,7 +256,7 @@ impl Account {
         name = "Account::revoke_certificate",
         err,
         skip_all,
-        fields(self.id),
+        fields(self.id, certificate = %x509_digest(certificate)),
     )]
     pub async fn revoke_certificate(&self, certificate: &X509) -> Result<()> {
         let der = BASE64.encode(certificate.to_der()?);
@@ -270,7 +271,7 @@ impl Account {
         name = "Account::revoke_certificate_with_reason",
         err,
         skip(self, certificate),
-        fields(self.id),
+        fields(self.id, certificate = %x509_digest(certificate)),
     )]
     pub async fn revoke_certificate_with_reason(
         &self,
@@ -282,6 +283,13 @@ impl Account {
             .revoke_certificate(der, Some(reason), &self.private_key, Some(&self.id))
             .await
     }
+}
+
+fn x509_digest(certificate: &X509) -> String {
+    let digest = certificate
+        .digest(MessageDigest::sha256())
+        .expect("digest should always succeed");
+    hex::encode(digest)
 }
 
 #[cfg(test)]
