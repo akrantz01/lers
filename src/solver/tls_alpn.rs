@@ -17,7 +17,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::oneshot,
 };
-use tracing::{error, instrument, span, Level, Span, field};
+use tracing::{error, field, instrument, span, Level, Span};
 
 mod error;
 #[cfg(test)]
@@ -135,7 +135,11 @@ fn new_acceptor(challenges: Challenges<Authorization>) -> io::Result<TlsAcceptor
     });
 
     acceptor.set_servername_callback(move |ssl, _alert| {
-        let span = span!(Level::DEBUG, "SslAcceptor::servername_callback");
+        let span = span!(
+            Level::DEBUG,
+            "SslAcceptor::servername_callback",
+            host = field::Empty
+        );
         let _enter = span.enter();
 
         let servername = ssl.servername(NameType::HOST_NAME).ok_or(SniError::NOACK)?;
