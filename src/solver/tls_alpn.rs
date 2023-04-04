@@ -260,6 +260,7 @@ mod tests {
         io,
         net::{SocketAddr, TcpStream},
     };
+    use test_log::test;
     use tokio::net::TcpListener;
     use x509_parser::{
         der_parser::parse_der,
@@ -340,7 +341,7 @@ mod tests {
         assert_eq!(String::from_utf8_lossy(bytes), expected);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn valid() {
         let (solver, handle, addr) = solver().await;
 
@@ -378,7 +379,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn wrong_domain() {
         let (solver, handle, addr) = solver().await;
 
@@ -402,7 +403,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn without_sni() {
         let (solver, handle, addr) = solver().await;
 
@@ -426,7 +427,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn without_alpn() {
         let (solver, handle, addr) = solver().await;
 

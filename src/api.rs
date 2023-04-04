@@ -370,6 +370,7 @@ mod tests {
         test::{client, TEST_URL},
         LETS_ENCRYPT_STAGING_URL,
     };
+    use test_log::test;
 
     async fn create_api(url: String) -> Api {
         Api::from_url(url, client(), 10, SolverManager::default())
@@ -377,7 +378,7 @@ mod tests {
             .unwrap()
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn new_api_lets_encrypt() {
         let api = create_api(LETS_ENCRYPT_STAGING_URL.to_string()).await;
 
@@ -404,7 +405,7 @@ mod tests {
         assert_eq!(api.0.urls.new_authz, None);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn new_api_pebble() {
         let api = create_api(TEST_URL.to_string()).await;
 

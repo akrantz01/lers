@@ -45,9 +45,12 @@ uuid = { version = "1.3.0", features = ["v4"], optional = true }
 
 [dev-dependencies]
 anyhow = "1"
+env_logger = "0.10"
 native-tls = { version = "0.2" }
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tokio-native-tls = { version = "0.3" }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt"] }
 x509-parser = "0.15"
 
 [package.metadata.docs.rs]

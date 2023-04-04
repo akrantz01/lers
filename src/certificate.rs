@@ -291,6 +291,7 @@ mod tests {
         pkey::{PKey, Private},
         x509::X509,
     };
+    use test_log::test;
 
     macro_rules! check_subjects {
         ($cert:expr => $($name:expr),+ $(,)?) => {
@@ -339,7 +340,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_no_identifiers() {
         let directory = directory().await;
         let account = account(directory).await;
@@ -348,7 +349,7 @@ mod tests {
         assert!(matches!(error, Error::MissingIdentifiers));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_missing_solvers() {
         let directory = directory().await;
         let account = account(directory).await;
@@ -362,7 +363,7 @@ mod tests {
         assert!(matches!(error, Error::MissingSolver));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_blocked_domain() {
         let directory = directory().await;
         let account = account(directory).await;
@@ -380,7 +381,7 @@ mod tests {
         assert!(error.detail.unwrap().contains("blocked-domain.example"));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_single_domain() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -401,7 +402,7 @@ mod tests {
         check_key(issued, &certificate.private_key);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_multiple_domains() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -424,7 +425,7 @@ mod tests {
         check_key(issued, &certificate.private_key);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_wildcard() {
         let directory = directory_with_dns01_solver().await;
         let account = account(directory).await;
@@ -445,7 +446,7 @@ mod tests {
         check_key(issued, &certificate.private_key);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_wildcard_without_dns01() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -459,7 +460,7 @@ mod tests {
         assert!(matches!(error, Error::MissingSolver));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_revoke_from_account() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -477,7 +478,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_revoke_with_reason_from_account() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -495,7 +496,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_revoke_from_certificate() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory.clone()).await;
@@ -510,7 +511,7 @@ mod tests {
         certificate.revoke(&directory).await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_revoke_with_reason_from_certificate() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory.clone()).await;
@@ -528,7 +529,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_renew_single_domain() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -543,7 +544,7 @@ mod tests {
         account.renew_certificate(certificate).await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_renew_multiple_domains() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -560,7 +561,7 @@ mod tests {
         account.renew_certificate(certificate).await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_renew_wildcard_domain() {
         let directory = directory_with_dns01_solver().await;
         let account = account(directory).await;

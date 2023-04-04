@@ -320,6 +320,7 @@ mod tests {
     use super::CloudflareDns01Solver;
     use crate::Solver;
     use std::{env, time::Duration};
+    use test_log::test;
     use tokio::time;
 
     const ZONE_NAME_ENV: &str = "DNS01_CF_ZONE";
@@ -329,7 +330,7 @@ mod tests {
         CloudflareDns01Solver::from_env().unwrap().build().unwrap()
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn zone_id_by_name_valid() -> reqwest::Result<()> {
         let test_zone = env::var(ZONE_NAME_ENV).unwrap();
         let expected_id = env::var(ZONE_ID_ENV).ok();
@@ -341,7 +342,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn zone_id_by_name_invalid() -> reqwest::Result<()> {
         let solver = solver();
         let id = solver.zone_id_by_name("lego.zz").await?;
@@ -350,7 +351,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn txt_record() -> reqwest::Result<()> {
         let zone = env::var(ZONE_NAME_ENV).unwrap();
         let zone_id = env::var(ZONE_ID_ENV).unwrap();
@@ -368,7 +369,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn remove_non_existent_txt_record() {
         let zone_id = env::var(ZONE_ID_ENV).unwrap();
 
@@ -379,7 +380,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn present_and_cleanup() {
         let zone = env::var(ZONE_NAME_ENV).unwrap();
         let solver = solver();
@@ -408,13 +409,13 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn cleanup_empty() {
         let solver = solver();
         solver.cleanup("this-does-not-exist").await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn cleanup_out_of_sync() {
         let solver = solver();
         {

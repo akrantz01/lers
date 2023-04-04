@@ -207,6 +207,7 @@ mod tests {
     use super::{Http01Solver, Solver, SolverHandle};
     use reqwest::{header, Client, StatusCode};
     use std::net::{SocketAddr, TcpListener};
+    use test_log::test;
 
     macro_rules! assert_challenges_size {
         ($solver:expr, $expected:expr) => {{
@@ -233,7 +234,7 @@ mod tests {
         format!("http://{addr}/.well-known/acme-challenge/{token}")
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn valid() {
         let (solver, handle, addr) = solver();
 
@@ -262,7 +263,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn post() {
         let (_solver, handle, addr) = solver();
 
@@ -274,7 +275,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn missing_token() {
         let (solver, handle, addr) = solver();
 
@@ -297,7 +298,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn wrong_token() {
         let (solver, handle, addr) = solver();
 
@@ -320,7 +321,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn missing_host_header() {
         let (solver, handle, addr) = solver();
 
@@ -338,7 +339,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn wrong_host_header() {
         let (solver, handle, addr) = solver();
 

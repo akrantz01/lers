@@ -111,8 +111,9 @@ impl Directory {
 mod tests {
     use super::{Directory, LETS_ENCRYPT_STAGING_URL};
     use crate::test::directory;
+    use test_log::test;
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn initialize_lets_encrypt() {
         let directory = Directory::builder(LETS_ENCRYPT_STAGING_URL)
             .build()
@@ -134,7 +135,7 @@ mod tests {
         assert_eq!(directory.meta().external_account_required, None);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn initialize_pebble() {
         let directory = directory().await;
 

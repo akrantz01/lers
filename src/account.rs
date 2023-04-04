@@ -303,6 +303,7 @@ mod tests {
     };
     use parking_lot::Mutex;
     use std::{collections::HashSet, fs};
+    use test_log::test;
 
     static ACCOUNT_IDS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| {
         let raw = fs::read("testdata/account-ids.json").unwrap();
@@ -315,7 +316,7 @@ mod tests {
         PKey::private_key_from_pem(&pem).unwrap()
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn lookup_when_exists() {
         let directory = directory().await;
         let account = directory
@@ -330,7 +331,7 @@ mod tests {
         assert!(!ids.insert(account.id));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn lookup_when_does_not_exists() {
         let directory = directory().await;
 
@@ -357,7 +358,7 @@ mod tests {
         assert!(error.subproblems.is_none());
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn create_if_not_exists_when_does_not_exist() {
         let directory = directory().await;
         let account = directory
@@ -372,7 +373,7 @@ mod tests {
         assert!(ids.insert(account.id));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn create_if_not_exists_when_exists() {
         let directory = directory().await;
         let account = directory
@@ -388,7 +389,7 @@ mod tests {
         assert!(!ids.insert(account.id));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn create_if_not_exists_with_external_account() {
         let directory = directory().await;
         let account = directory
@@ -407,7 +408,7 @@ mod tests {
         assert!(ids.insert(account.id));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn create_if_not_exists_with_non_existent_external_account() {
         let directory = directory().await;
         let result = directory
