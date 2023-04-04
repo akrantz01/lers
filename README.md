@@ -16,13 +16,13 @@ The API and implementation were inspired by [acme2][], [acme-micro][], and [lego
 - Robust implementation of ACME challenges
   - [HTTP][] (http-01)
   - [DNS][] (dns-01)
+  - [TLS][] (tls-alpn-01)
 - SAN certificate support
 - Custom challenge solvers ([`Solver` trait][])
 - [External account bindings][]
 
 ### Missing features
 
-- [ ] [TLS-ALPN-01][] challenge implementation
 - [ ] Certificate bundling
 
 Contributions are welcome for any of the above features.
@@ -38,8 +38,8 @@ Currently, the following providers are supported:
 [RFC 8555]: https://www.rfc-editor.org/rfc/rfc8555.html
 [HTTP]: https://docs.rs/lers/latest/lers/solver/struct.Http01Solver.html
 [DNS]: https://docs.rs/lers/latest/lers/solver/dns/index.html
+[TLS]: https://docs.rs/lers/latest/lers/solver/struct.TlsAlpn01Solver.html
 [`Solver` trait]: https://docs.rs/lers/latest/lers/solver/trait.Solver.html
-[TLS-ALPN-01]: https://www.rfc-editor.org/rfc/rfc8737.html
 [External account bindings]: https://www.rfc-editor.org/rfc/rfc8555.html#page-38
 
 [`CloudflareDns01Solver`]: https://docs.rs/lers/latest/lers/solver/dns/struct.CloudflareDns01Solver.html

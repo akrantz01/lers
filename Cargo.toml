@@ -19,6 +19,7 @@ vendored = ["openssl/vendored", "reqwest/native-tls-vendored"]
 
 http-01 = ["hyper"]
 dns-01 = ["trust-dns-resolver"]
+tls-alpn-01 = ["rcgen"]
 dns-01-cloudflare = ["dns-01"]
 
 integration = []
@@ -32,6 +33,7 @@ hyper = { version = "0.14", features = ["server", "tcp"], optional = true }
 once_cell = { version = "1", features = ["parking_lot"] }
 openssl = "0.10"
 parking_lot = "0.12"
+rcgen = { version = "0.10", default-features = false, optional = true }
 reqwest = { version = "0.11", default-features = false, features = ["json", "native-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -40,7 +42,10 @@ trust-dns-resolver = { version = "0.22", optional = true }
 
 [dev-dependencies]
 anyhow = "1"
+native-tls = { version = "0.2" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio-native-tls = { version = "0.3" }
+x509-parser = "0.15"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -53,3 +58,7 @@ required-features = ["http-01"]
 [[example]]
 name = "dns-01"
 required-features = ["dns-01", "dns-01-cloudflare"]
+
+[[example]]
+name = "tls-alpn-01"
+required-features = ["tls-alpn-01"]

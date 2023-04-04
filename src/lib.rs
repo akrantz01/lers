@@ -11,7 +11,8 @@
 //!
 //! - ACME v2 support (according to [RFC 8555](https://www.rfc-editor.org/rfc/rfc8555.html))
 //! - Account creation, certificate issuance, certificate renewal, and certificate revocation
-//! - Robust implementation of [HTTP-01](solver::Http01Solver) and [DNS-01](solver::dns) challenges
+//! - Robust implementation of the [HTTP-01](solver::Http01Solver), [DNS-01](solver::dns),
+//!   [TLS-ALPN-01](solver::TlsAlpn01Solver) challenges
 //! - Custom challenge solvers via [`Solver`]
 //! - [External account bindings](https://www.rfc-editor.org/rfc/rfc8555.html#page-38) support
 //!

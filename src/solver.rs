@@ -19,23 +19,42 @@
 //!
 //! However, you will need to deal with the potential security threat of keeping DNS API credentials
 //! on your server.
+//!
+//! ## TLS-ALPN-01
+//! This challenge was developed after TLS-SNI-01 became deprecated, and is being developed as a
+//! separate standard. Like TLS-SNI-01, it is performed via TLS on port 443. However, it uses a
+//! custom ALPN protocol to ensure that only servers that are aware of this challenge type will
+//! respond to validation requests. This also allows validation requests for this challenge type
+//! to use an SNI field that matches the domain name being validated, making it more secure.
+//!
+//! However, it can only work over port `443` and must be available on all servers resolved by the
+//! domain.
 
+use crate::responses::ChallengeType;
 use std::{
     collections::HashMap,
     fmt::{Debug, Formatter},
     time::Duration,
 };
 
+mod common;
 #[cfg(feature = "dns-01")]
 #[cfg_attr(docsrs, doc(cfg(feature = "dns-01")))]
 pub mod dns;
 #[cfg(feature = "http-01")]
 mod http;
+#[cfg(feature = "tls-alpn-01")]
+mod tls_alpn;
 
-use crate::responses::ChallengeType;
+#[cfg(any(feature = "http-01", feature = "tls-alpn-01"))]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "http-01", feature = "tls-alpn-01"))))]
+pub use common::SolverHandle;
 #[cfg(feature = "http-01")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http-01")))]
-pub use http::{Http01Solver, Http01SolverHandle};
+pub use http::Http01Solver;
+#[cfg(feature = "tls-alpn-01")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tls-alpn-01")))]
+pub use tls_alpn::TlsAlpn01Solver;
 
 /// Enables implementing a custom challenge solver.
 ///
