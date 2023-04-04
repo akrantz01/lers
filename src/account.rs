@@ -6,6 +6,7 @@ use crate::{
     Error,
 };
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD as BASE64, Engine};
+use openssl::hash::MessageDigest;
 use openssl::{
     ec::{EcGroup, EcKey},
     nid::Nid,
@@ -13,6 +14,7 @@ use openssl::{
     x509::X509,
 };
 use std::collections::HashSet;
+use tracing::{field, instrument, Level, Span};
 
 pub struct NoPrivateKey;
 pub struct WithPrivateKey(PKey<Private>);
@@ -72,6 +74,18 @@ impl<'o> AccountBuilder<'o, NoPrivateKey> {
 
     /// Create the account if it doesn't already exists, returning the existing account if it does.
     /// Will generate a private key for the account.
+    #[instrument(
+        level = Level::INFO,
+        name = "AccountBuilder<NoPrivateKey>::create_if_not_exists",
+        err,
+        skip_all,
+        fields(
+            account.id, account.status,
+            ?self.contacts,
+            ?self.terms_of_service_agreed,
+            self.external_account_options.key_id = ?self.external_account_options.as_ref().map(|o| o.kid),
+        ),
+    )]
     pub async fn create_if_not_exists(self) -> Result<Account> {
         let key = {
             let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
@@ -89,6 +103,8 @@ impl<'o> AccountBuilder<'o, NoPrivateKey> {
                 &key,
             )
             .await?;
+        Span::current().record("account.id", &id);
+        Span::current().record("account.status", field::debug(account.status));
 
         into_account(self.api, key, id, account)
     }
@@ -97,6 +113,18 @@ impl<'o> AccountBuilder<'o, NoPrivateKey> {
 impl<'o> AccountBuilder<'o, WithPrivateKey> {
     /// Lookup the account by private key, fails if it doesn't exist or a private key was
     /// not specified.
+    #[instrument(
+        level = Level::INFO,
+        name = "AccountBuilder<WithPrivateKey>::lookup",
+        err,
+        skip_all,
+        fields(
+            account.id, account.status,
+            ?self.contacts,
+            ?self.terms_of_service_agreed,
+            self.external_account_options.key_id = ?self.external_account_options.as_ref().map(|o| o.kid),
+        ),
+    )]
     pub async fn lookup(self) -> Result<Account> {
         let (id, account) = self
             .api
@@ -108,11 +136,25 @@ impl<'o> AccountBuilder<'o, WithPrivateKey> {
                 &self.private_key.0,
             )
             .await?;
+        Span::current().record("account.id", &id);
+        Span::current().record("account.status", field::debug(&account.status));
 
         into_account(self.api, self.private_key.0, id, account)
     }
 
     /// Create the account if it doesn't already exists, returning the existing account if it does.
+    #[instrument(
+        level = Level::INFO,
+        name = "AccountBuilder<WithPrivateKey>::create_if_not_exists",
+        err,
+        skip_all,
+        fields(
+            account.id, account.status,
+            ?self.contacts,
+            ?self.terms_of_service_agreed,
+            self.external_account_options.key_id = ?self.external_account_options.as_ref().map(|o| o.kid),
+        ),
+    )]
     pub async fn create_if_not_exists(self) -> Result<Account> {
         let (id, account) = self
             .api
@@ -124,6 +166,8 @@ impl<'o> AccountBuilder<'o, WithPrivateKey> {
                 &self.private_key.0,
             )
             .await?;
+        Span::current().record("account.id", &id);
+        Span::current().record("account.status", field::debug(&account.status));
 
         into_account(self.api, self.private_key.0, id, account)
     }
@@ -167,6 +211,13 @@ impl Account {
     }
 
     /// Renew a certificate
+    #[instrument(
+        level = Level::INFO,
+        name = "Account::renew_certificate",
+        err,
+        skip_all,
+        fields(self.id, certificate = %certificate.digest()),
+    )]
     pub async fn renew_certificate(&self, certificate: Certificate) -> Result<Certificate> {
         let inner = certificate.x509();
         let mut domains = HashSet::new();
@@ -200,6 +251,13 @@ impl Account {
     }
 
     /// Revoke a certificate
+    #[instrument(
+        level = Level::INFO,
+        name = "Account::revoke_certificate",
+        err,
+        skip_all,
+        fields(self.id, certificate = %x509_digest(certificate)),
+    )]
     pub async fn revoke_certificate(&self, certificate: &X509) -> Result<()> {
         let der = BASE64.encode(certificate.to_der()?);
         self.api
@@ -208,6 +266,13 @@ impl Account {
     }
 
     /// Revoke a certificate with a reason.
+    #[instrument(
+        level = Level::INFO,
+        name = "Account::revoke_certificate_with_reason",
+        err,
+        skip(self, certificate),
+        fields(self.id, certificate = %x509_digest(certificate)),
+    )]
     pub async fn revoke_certificate_with_reason(
         &self,
         certificate: &X509,
@@ -218,6 +283,13 @@ impl Account {
             .revoke_certificate(der, Some(reason), &self.private_key, Some(&self.id))
             .await
     }
+}
+
+fn x509_digest(certificate: &X509) -> String {
+    let digest = certificate
+        .digest(MessageDigest::sha256())
+        .expect("digest should always succeed");
+    hex::encode(digest)
 }
 
 #[cfg(test)]
@@ -231,6 +303,7 @@ mod tests {
     };
     use parking_lot::Mutex;
     use std::{collections::HashSet, fs};
+    use test_log::test;
 
     static ACCOUNT_IDS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| {
         let raw = fs::read("testdata/account-ids.json").unwrap();
@@ -243,7 +316,7 @@ mod tests {
         PKey::private_key_from_pem(&pem).unwrap()
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn lookup_when_exists() {
         let directory = directory().await;
         let account = directory
@@ -258,7 +331,7 @@ mod tests {
         assert!(!ids.insert(account.id));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn lookup_when_does_not_exists() {
         let directory = directory().await;
 
@@ -285,7 +358,7 @@ mod tests {
         assert!(error.subproblems.is_none());
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn create_if_not_exists_when_does_not_exist() {
         let directory = directory().await;
         let account = directory
@@ -300,7 +373,7 @@ mod tests {
         assert!(ids.insert(account.id));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn create_if_not_exists_when_exists() {
         let directory = directory().await;
         let account = directory
@@ -316,7 +389,7 @@ mod tests {
         assert!(!ids.insert(account.id));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn create_if_not_exists_with_external_account() {
         let directory = directory().await;
         let account = directory
@@ -335,7 +408,7 @@ mod tests {
         assert!(ids.insert(account.id));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn create_if_not_exists_with_non_existent_external_account() {
         let directory = directory().await;
         let result = directory

@@ -15,6 +15,7 @@ use openssl::{
     x509::{extension::SubjectAlternativeName, X509Name, X509Req, X509},
 };
 use std::{cmp::Ordering, time::Duration};
+use tracing::{debug, field, instrument, Level, Span};
 
 const DEFAULT_INTERVAL: Duration = Duration::from_secs(2);
 const DEFAULT_ATTEMPTS: usize = 10;
@@ -29,6 +30,13 @@ pub(crate) struct Order<'a> {
 
 impl<'a> Order<'a> {
     /// Create a new order for a certificate
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Order::create",
+        err,
+        skip_all,
+        fields(order.id, order.status),
+    )]
     pub async fn create(
         account: &'a Account,
         identifiers: Vec<Identifier>,
@@ -46,6 +54,9 @@ impl<'a> Order<'a> {
             )
             .await?;
 
+        Span::current().record("order.id", &url);
+        Span::current().record("order.status", field::debug(&inner.status));
+
         Ok(Order {
             account,
             url,
@@ -54,6 +65,13 @@ impl<'a> Order<'a> {
     }
 
     /// Get all the authorizations for the order
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Order::authorizations",
+        err,
+        skip_all,
+        fields(self.id = self.url, self.status = ?self.inner.status),
+    )]
     pub async fn authorizations(&self) -> Result<Vec<Authorization>> {
         future::try_join_all(
             self.inner
@@ -62,6 +80,11 @@ impl<'a> Order<'a> {
                 .map(|url| Authorization::fetch(self.account, url)),
         )
         .await
+    }
+
+    /// Get the ID of the order
+    pub fn id(&self) -> &str {
+        &self.url
     }
 
     /// Generate a base64 URL-encoded CSR for the certificate private key and identifiers
@@ -102,6 +125,13 @@ impl<'a> Order<'a> {
     }
 
     /// Finalize an order with the provided CSR
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Order::finalize",
+        err,
+        skip_all,
+        fields(self.id = self.url, self.status = ?self.inner.status, updated.status),
+    )]
     pub async fn finalize(&mut self, private_key: &PKey<Private>) -> Result<()> {
         let csr = self.generate_csr(private_key)?;
 
@@ -116,11 +146,24 @@ impl<'a> Order<'a> {
             )
             .await?;
 
+        Span::current().record("updated.status", field::debug(&order.status));
+
         self.inner = order;
         Ok(())
     }
 
     /// Download the certificate from the order
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Order::download",
+        err,
+        skip_all,
+        fields(
+            self.id = self.url,
+            self.status = ?self.inner.status,
+            self.has_certificate = ?self.inner.certificate.is_some(),
+        ),
+    )]
     pub async fn download(self) -> Result<Vec<X509>> {
         if self.inner.status != OrderStatus::Valid {
             return Err(match self.inner.error {
@@ -149,6 +192,13 @@ impl<'a> Order<'a> {
     }
 
     /// Wait for the order to transition into [`OrderStatus::Ready`]
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Order::wait_ready",
+        err,
+        skip_all,
+        fields(self.id = self.url, self.status = ?self.inner.status, updated.status)
+    )]
     pub async fn wait_ready(&mut self) -> Result<()> {
         let order = self
             .account
@@ -168,12 +218,21 @@ impl<'a> Order<'a> {
                 DEFAULT_ATTEMPTS,
             )
             .await?;
+
+        Span::current().record("updated.status", field::debug(&order.status));
         self.inner = order;
 
         Ok(())
     }
 
     /// Wait for the order to transition into [`OrderStatus::Valid`] or [`OrderStatus::Invalid`]
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Order::wait_done",
+        err,
+        skip_all,
+        fields(self.id = self.url, self.status = ?self.inner.status, updated.status)
+    )]
     pub async fn wait_done(&mut self) -> Result<()> {
         let order = self
             .account
@@ -193,6 +252,8 @@ impl<'a> Order<'a> {
                 DEFAULT_ATTEMPTS,
             )
             .await?;
+
+        Span::current().record("updated.status", field::debug(&order.status));
         self.inner = order;
 
         Ok(())
@@ -209,6 +270,18 @@ pub(crate) struct Authorization<'a> {
 
 impl<'a> Authorization<'a> {
     /// Fetch an authorization from it's URL
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Authorization::fetch",
+        err, skip(account),
+        fields(
+            %account.id,
+            authorization.status,
+            authorization.challenges.len,
+            authorization.identifier,
+            authorization.wildcard,
+        ),
+    )]
     async fn fetch(account: &'a Account, url: &str) -> Result<Authorization<'a>> {
         let mut authorization = account
             .api
@@ -216,6 +289,21 @@ impl<'a> Authorization<'a> {
             .await?;
 
         authorization.challenges.sort_by(challenge_type);
+
+        let span = Span::current();
+        span.record("authorization.status", field::debug(&authorization.status));
+        span.record(
+            "authorization.challenges.len",
+            authorization.challenges.len(),
+        );
+        span.record(
+            "authorization.identifier",
+            field::debug(&authorization.identifier),
+        );
+        span.record(
+            "authorization.wildcard",
+            authorization.wildcard.unwrap_or_default(),
+        );
 
         Ok(Authorization {
             account,
@@ -225,6 +313,18 @@ impl<'a> Authorization<'a> {
     }
 
     /// Attempt to solve one of the authorization's challenges
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Authorization::solve",
+        err,
+        skip_all,
+        fields(
+            self.id = %self.url,
+            self.status = ?self.inner.status,
+            self.identifier = ?self.inner.identifier,
+            self.wildcard = ?self.inner.wildcard.unwrap_or_default(),
+        ),
+    )]
     pub async fn solve(&self) -> Result<()> {
         let api = &self.account.api;
         let private_key = &self.account.private_key;
@@ -233,7 +333,9 @@ impl<'a> Authorization<'a> {
         let Identifier::Dns(domain) = &self.inner.identifier;
 
         for challenge in &self.inner.challenges {
+            debug!("finding solver for {:?}", challenge.type_);
             let Some(solver) = api.solver_for(challenge) else { continue };
+            debug!("attempting to solve {:?} challenge", challenge.type_);
 
             let authorization = format_key_authorization(challenge, private_key)?;
             solver
@@ -269,6 +371,19 @@ impl<'a> Authorization<'a> {
 
     /// Wait for the challenge to transition into either [`ChallengeStatus::Valid`]
     /// or [`ChallengeStatus::Invalid`].
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Authorization::wait_for_challenge",
+        err,
+        skip(self),
+        fields(
+            self.id = %self.url,
+            self.status = ?self.inner.status,
+            self.identifier = ?self.inner.identifier,
+            self.wildcard = ?self.inner.wildcard.unwrap_or_default(),
+            challenge.status, challenge.r#type,
+        )
+    )]
     async fn wait_for_challenge(
         &self,
         url: &str,
@@ -294,11 +409,27 @@ impl<'a> Authorization<'a> {
             )
             .await?;
 
+        Span::current().record("challenge.status", field::debug(&challenge.status));
+        Span::current().record("challenge.type", field::debug(&challenge.type_));
+
         Ok(challenge.status)
     }
 
     /// Wait for the authorization to transition into either [`AuthorizationStatus::Valid`] or
     /// [`AuthorizationStatus::Invalid`]
+    #[instrument(
+        level = Level::DEBUG,
+        name = "Authorization::wait_done",
+        err,
+        skip_all,
+        fields(
+            self.id = %self.url,
+            self.status = ?self.inner.status,
+            self.identifier = ?self.inner.identifier,
+            self.wildcard = ?self.inner.wildcard.unwrap_or_default(),
+            updated.status,
+        ),
+    )]
     async fn wait_done(&self) -> Result<AuthorizationStatus> {
         let authorization = self
             .account
@@ -321,6 +452,8 @@ impl<'a> Authorization<'a> {
                 DEFAULT_ATTEMPTS,
             )
             .await?;
+
+        Span::current().record("updated.status", field::debug(&authorization.status));
 
         Ok(authorization.status)
     }

@@ -17,7 +17,7 @@ categories = ["web-programming"]
 default = ["http-01"]
 vendored = ["openssl/vendored", "reqwest/native-tls-vendored"]
 
-http-01 = ["hyper"]
+http-01 = ["hyper", "uuid"]
 dns-01 = ["trust-dns-resolver"]
 tls-alpn-01 = ["rcgen"]
 dns-01-cloudflare = ["dns-01"]
@@ -29,6 +29,7 @@ async-trait = "0.1"
 base64 = "0.21"
 chrono = { version = "0.4", features = ["serde"] }
 futures = { version = "0.3", default-features = false, features = ["async-await", "std"] }
+hex = "0.4.3"
 hyper = { version = "0.14", features = ["server", "tcp"], optional = true }
 once_cell = { version = "1", features = ["parking_lot"] }
 openssl = "0.10"
@@ -38,13 +39,18 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "nat
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["fs", "time"] }
+tracing = "0.1"
 trust-dns-resolver = { version = "0.22", optional = true }
+uuid = { version = "1.3.0", features = ["v4"], optional = true }
 
 [dev-dependencies]
 anyhow = "1"
+env_logger = "0.10"
 native-tls = { version = "0.2" }
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tokio-native-tls = { version = "0.3" }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt"] }
 x509-parser = "0.15"
 
 [package.metadata.docs.rs]

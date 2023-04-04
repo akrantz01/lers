@@ -10,10 +10,12 @@ use chrono::{DateTime, Utc};
 use futures::future;
 use openssl::{
     ec::{EcGroup, EcKey},
+    hash::MessageDigest,
     nid::Nid,
     pkey::{PKey, Private},
     x509::X509,
 };
+use tracing::{info, instrument, Level, Span};
 
 /// Used to configure the ordering of a certificate
 pub struct CertificateBuilder<'a> {
@@ -69,6 +71,19 @@ impl<'a> CertificateBuilder<'a> {
     }
 
     /// Obtain the certificate
+    #[instrument(
+        level = Level::INFO,
+        name = "CertificateBuilder::obtain",
+        err,
+        skip_all,
+        fields(
+            order.id,
+            self.account.id,
+            ?self.identifiers,
+            ?self.not_before,
+            ?self.not_after,
+        ),
+    )]
     pub async fn obtain(self) -> Result<Certificate> {
         if self.identifiers.is_empty() {
             return Err(Error::MissingIdentifiers);
@@ -81,10 +96,13 @@ impl<'a> CertificateBuilder<'a> {
             self.not_after,
         )
         .await?;
+        Span::current().record("order.id", order.id());
 
+        info!("solving order authorization(s)");
         let authorizations = order.authorizations().await?;
         future::try_join_all(authorizations.iter().map(|a| a.solve())).await?;
 
+        info!("waiting for order to be ready...");
         order.wait_ready().await?;
 
         let private_key = match self.private_key {
@@ -95,11 +113,15 @@ impl<'a> CertificateBuilder<'a> {
                 PKey::from_ec_key(ec)?
             }
         };
+
+        info!("finalizing order...");
         order.finalize(&private_key).await?;
 
         order.wait_done().await?;
 
+        info!("order completed, downloading certificate...");
         let chain = order.download().await?;
+
         Ok(Certificate { chain, private_key })
     }
 }
@@ -179,7 +201,23 @@ impl Certificate {
         self.chain.as_slice()
     }
 
+    /// Calculate the SHA256 digest of the leaf certificate in hex format
+    pub fn digest(&self) -> String {
+        let digest = self
+            .x509()
+            .digest(MessageDigest::sha256())
+            .expect("digest should always succeed");
+        hex::encode(digest)
+    }
+
     /// Revoke this certificate.
+    #[instrument(
+        level = Level::INFO,
+        name = "Certificate::revoke",
+        err,
+        skip_all,
+        fields(self = %self.digest())
+    )]
     pub async fn revoke(&self, directory: &Directory) -> Result<()> {
         let der = BASE64.encode(self.to_der()?);
         directory
@@ -189,6 +227,13 @@ impl Certificate {
     }
 
     /// Revoke this certificate with a reason.
+    #[instrument(
+        level = Level::INFO,
+        name = "Certificate::revoke_with_reason",
+        err,
+        skip_all,
+        fields(self = %self.digest())
+    )]
     pub async fn revoke_with_reason(
         &self,
         directory: &Directory,
@@ -246,6 +291,7 @@ mod tests {
         pkey::{PKey, Private},
         x509::X509,
     };
+    use test_log::test;
 
     macro_rules! check_subjects {
         ($cert:expr => $($name:expr),+ $(,)?) => {
@@ -294,7 +340,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_no_identifiers() {
         let directory = directory().await;
         let account = account(directory).await;
@@ -303,7 +349,7 @@ mod tests {
         assert!(matches!(error, Error::MissingIdentifiers));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_missing_solvers() {
         let directory = directory().await;
         let account = account(directory).await;
@@ -317,7 +363,7 @@ mod tests {
         assert!(matches!(error, Error::MissingSolver));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_blocked_domain() {
         let directory = directory().await;
         let account = account(directory).await;
@@ -335,7 +381,7 @@ mod tests {
         assert!(error.detail.unwrap().contains("blocked-domain.example"));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_single_domain() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -356,7 +402,7 @@ mod tests {
         check_key(issued, &certificate.private_key);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_multiple_domains() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -379,7 +425,7 @@ mod tests {
         check_key(issued, &certificate.private_key);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_wildcard() {
         let directory = directory_with_dns01_solver().await;
         let account = account(directory).await;
@@ -400,7 +446,7 @@ mod tests {
         check_key(issued, &certificate.private_key);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_wildcard_without_dns01() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -414,7 +460,7 @@ mod tests {
         assert!(matches!(error, Error::MissingSolver));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_revoke_from_account() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -432,7 +478,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_revoke_with_reason_from_account() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -450,7 +496,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_revoke_from_certificate() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory.clone()).await;
@@ -465,7 +511,7 @@ mod tests {
         certificate.revoke(&directory).await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_revoke_with_reason_from_certificate() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory.clone()).await;
@@ -483,7 +529,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_renew_single_domain() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -498,7 +544,7 @@ mod tests {
         account.renew_certificate(certificate).await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_renew_multiple_domains() {
         let directory = directory_with_http01_solver().await;
         let account = account(directory).await;
@@ -515,7 +561,7 @@ mod tests {
         account.renew_certificate(certificate).await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn obtain_and_renew_wildcard_domain() {
         let directory = directory_with_dns01_solver().await;
         let account = account(directory).await;

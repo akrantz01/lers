@@ -15,6 +15,8 @@ use std::{
     task::{Context, Poll},
 };
 use tokio::sync::oneshot;
+use tracing::{instrument, Level, Span};
+use uuid::Uuid;
 
 /// A bare-bones implementation of a solver for the HTTP-01 challenge.
 #[derive(Clone, Debug, Default)]
@@ -59,6 +61,13 @@ impl Http01Solver {
 
 #[async_trait::async_trait]
 impl Solver for Http01Solver {
+    #[instrument(
+        level = Level::INFO,
+        name = "Solver::present",
+        err,
+        skip_all,
+        fields(token, domain, solver = std::any::type_name::<Self>()),
+    )]
     async fn present(
         &self,
         domain: String,
@@ -77,6 +86,13 @@ impl Solver for Http01Solver {
         Ok(())
     }
 
+    #[instrument(
+        level = Level::INFO,
+        name = "Solver::cleanup",
+        err,
+        skip_all,
+        fields(token, solver = std::any::type_name::<Self>()),
+    )]
     async fn cleanup(
         &self,
         token: &str,
@@ -105,8 +121,21 @@ impl Service<Request<Body>> for SolverService {
         Poll::Ready(Ok(()))
     }
 
+    #[instrument(
+        level = Level::INFO,
+        name = "Http01Solver::request",
+        skip_all,
+        fields(
+            method = %req.method(),
+            uri = %req.uri(),
+            version = ?req.version(),
+            id = %Uuid::new_v4(),
+            host, status,
+        ),
+    )]
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         fn response(body: &'static str, status: StatusCode) -> Response<Body> {
+            Span::current().record("status", status.as_u16());
             Response::builder()
                 .status(status)
                 .body(Body::from(body))
@@ -133,10 +162,14 @@ impl Service<Request<Body>> for SolverService {
             .strip_prefix("/.well-known/acme-challenge/");
 
         if let (Some(token), Some(host)) = (token, host) {
+            Span::current().record("host", host);
+
             let challenges = self.0.read();
 
             if let Some(challenge) = challenges.get(token) {
                 if challenge.domain == host {
+                    Span::current().record("status", 200);
+
                     let response = Response::builder()
                         .status(StatusCode::OK)
                         .header(header::CONTENT_TYPE, "application/octet-stream")
@@ -174,6 +207,7 @@ mod tests {
     use super::{Http01Solver, Solver, SolverHandle};
     use reqwest::{header, Client, StatusCode};
     use std::net::{SocketAddr, TcpListener};
+    use test_log::test;
 
     macro_rules! assert_challenges_size {
         ($solver:expr, $expected:expr) => {{
@@ -200,7 +234,7 @@ mod tests {
         format!("http://{addr}/.well-known/acme-challenge/{token}")
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn valid() {
         let (solver, handle, addr) = solver();
 
@@ -229,7 +263,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn post() {
         let (_solver, handle, addr) = solver();
 
@@ -241,7 +275,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn missing_token() {
         let (solver, handle, addr) = solver();
 
@@ -264,7 +298,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn wrong_token() {
         let (solver, handle, addr) = solver();
 
@@ -287,7 +321,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn missing_host_header() {
         let (solver, handle, addr) = solver();
 
@@ -305,7 +339,7 @@ mod tests {
         handle.stop().await.unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn wrong_host_header() {
         let (solver, handle, addr) = solver();
 
