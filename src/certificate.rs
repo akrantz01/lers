@@ -10,10 +10,12 @@ use chrono::{DateTime, Utc};
 use futures::future;
 use openssl::{
     ec::{EcGroup, EcKey},
+    hash::MessageDigest,
     nid::Nid,
     pkey::{PKey, Private},
     x509::X509,
 };
+use tracing::{instrument, Level};
 
 /// Used to configure the ordering of a certificate
 pub struct CertificateBuilder<'a> {
@@ -69,6 +71,18 @@ impl<'a> CertificateBuilder<'a> {
     }
 
     /// Obtain the certificate
+    #[instrument(
+        level = Level::INFO,
+        name = "CertificateBuilder::obtain",
+        err,
+        skip_all,
+        fields(
+            self.account.id,
+            ?self.identifiers,
+            ?self.not_before,
+            ?self.not_after,
+        ),
+    )]
     pub async fn obtain(self) -> Result<Certificate> {
         if self.identifiers.is_empty() {
             return Err(Error::MissingIdentifiers);
@@ -179,7 +193,23 @@ impl Certificate {
         self.chain.as_slice()
     }
 
+    /// Calculate the SHA256 digest of the leaf certificate in hex format
+    pub fn digest(&self) -> String {
+        let digest = self
+            .x509()
+            .digest(MessageDigest::sha256())
+            .expect("digest should always succeed");
+        hex::encode(digest)
+    }
+
     /// Revoke this certificate.
+    #[instrument(
+        level = Level::INFO,
+        name = "Certificate::revoke",
+        err,
+        skip_all,
+        fields(self = %self.digest())
+    )]
     pub async fn revoke(&self, directory: &Directory) -> Result<()> {
         let der = BASE64.encode(self.to_der()?);
         directory
@@ -189,6 +219,13 @@ impl Certificate {
     }
 
     /// Revoke this certificate with a reason.
+    #[instrument(
+        level = Level::INFO,
+        name = "Certificate::revoke_with_reason",
+        err,
+        skip_all,
+        fields(self = %self.digest())
+    )]
     pub async fn revoke_with_reason(
         &self,
         directory: &Directory,
