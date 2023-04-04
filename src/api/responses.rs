@@ -207,6 +207,7 @@ pub enum ChallengeType {
     /// ACME server validates control of the domain name by connecting to a TLS server at one of the
     /// addresses resolved for the domain name and verifying that a certificate with specific
     /// content is presented.
+    #[serde(rename = "tls-alpn-01")]
     TlsAlpn01,
     /// The server responded with an unknown challenge type
     #[serde(other)]
