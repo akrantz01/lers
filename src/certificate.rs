@@ -15,7 +15,7 @@ use openssl::{
     pkey::{PKey, Private},
     x509::X509,
 };
-use tracing::{instrument, Level};
+use tracing::{info, instrument, Level, Span};
 
 /// Used to configure the ordering of a certificate
 pub struct CertificateBuilder<'a> {
@@ -77,6 +77,7 @@ impl<'a> CertificateBuilder<'a> {
         err,
         skip_all,
         fields(
+            order.id,
             self.account.id,
             ?self.identifiers,
             ?self.not_before,
@@ -95,10 +96,13 @@ impl<'a> CertificateBuilder<'a> {
             self.not_after,
         )
         .await?;
+        Span::current().record("order.id", &order.id());
 
+        info!("solving order authorization(s)");
         let authorizations = order.authorizations().await?;
         future::try_join_all(authorizations.iter().map(|a| a.solve())).await?;
 
+        info!("waiting for order to be ready...");
         order.wait_ready().await?;
 
         let private_key = match self.private_key {
@@ -109,11 +113,15 @@ impl<'a> CertificateBuilder<'a> {
                 PKey::from_ec_key(ec)?
             }
         };
+
+        info!("finalizing order...");
         order.finalize(&private_key).await?;
 
         order.wait_done().await?;
 
+        info!("order completed, downloading certificate...");
         let chain = order.download().await?;
+
         Ok(Certificate { chain, private_key })
     }
 }
