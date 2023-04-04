@@ -46,4 +46,14 @@ jobs:
       - uses: actions/checkout@v3
 
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --features http-01,dns-01 --examples
+      - run: pip install yq
+
+      - name: Build examples
+        run: |
+          for example in $(tomlq -r '.example[] | "\(.name):\(.["required-features"] | join(","))"' Cargo.toml); do
+            name=$(echo $example | awk -F: '{ print $1 }')
+            features=$(echo $example | awk -F: '{ print $2 }')
+
+            echo "Building example $name"
+            cargo build --example $name --features $features
+          done
