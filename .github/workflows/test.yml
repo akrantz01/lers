@@ -38,3 +38,12 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
 
       - run: just test http-01,dns-01 --no-default-features
+
+  examples:
+    name: Examples
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --features http-01,dns-01 --examples
