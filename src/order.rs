@@ -294,7 +294,7 @@ impl<'a> Authorization<'a> {
         span.record("authorization.status", field::debug(&authorization.status));
         span.record(
             "authorization.challenges.len",
-            &authorization.challenges.len(),
+            authorization.challenges.len(),
         );
         span.record(
             "authorization.identifier",

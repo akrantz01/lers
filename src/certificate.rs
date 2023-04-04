@@ -96,7 +96,7 @@ impl<'a> CertificateBuilder<'a> {
             self.not_after,
         )
         .await?;
-        Span::current().record("order.id", &order.id());
+        Span::current().record("order.id", order.id());
 
         info!("solving order authorization(s)");
         let authorizations = order.authorizations().await?;
