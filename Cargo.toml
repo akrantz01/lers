@@ -58,3 +58,7 @@ required-features = ["http-01"]
 [[example]]
 name = "dns-01"
 required-features = ["dns-01", "dns-01-cloudflare"]
+
+[[example]]
+name = "tls-alpn-01"
+required-features = ["tls-alpn-01"]
