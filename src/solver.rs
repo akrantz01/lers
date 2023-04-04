@@ -19,6 +19,16 @@
 //!
 //! However, you will need to deal with the potential security threat of keeping DNS API credentials
 //! on your server.
+//!
+//! ## TLS-ALPN-01
+//! This challenge was developed after TLS-SNI-01 became deprecated, and is being developed as a
+//! separate standard. Like TLS-SNI-01, it is performed via TLS on port 443. However, it uses a
+//! custom ALPN protocol to ensure that only servers that are aware of this challenge type will
+//! respond to validation requests. This also allows validation requests for this challenge type
+//! to use an SNI field that matches the domain name being validated, making it more secure.
+//!
+//! However, it can only work over port `443` and must be available on all servers resolved by the
+//! domain.
 
 use crate::responses::ChallengeType;
 use std::{
