@@ -4,17 +4,20 @@ use super::{
     Solver,
 };
 use futures::future::FutureExt;
-use openssl::error::ErrorStack;
-use openssl::pkey::{PKey, Private};
-use openssl::ssl::{
-    select_next_proto, AlpnError, NameType, SniError, SslAcceptor, SslContext, SslMethod,
+use openssl::{
+    error::ErrorStack,
+    pkey::{PKey, Private},
+    ssl::{select_next_proto, AlpnError, NameType, SniError, SslAcceptor, SslContext, SslMethod},
+    x509::X509,
 };
-use openssl::x509::X509;
 use rcgen::{Certificate, CertificateParams, CustomExtension, RcgenError, SanType};
-use std::{io, net::SocketAddr};
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpListener;
-use tokio::sync::oneshot;
+use std::{error::Error, io, net::SocketAddr, sync::Arc};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpListener, TcpStream},
+    sync::oneshot,
+};
+use tracing::{error, instrument, span, Level, Span, field};
 
 mod error;
 #[cfg(test)]
@@ -59,12 +62,19 @@ impl TlsAlpn01Solver {
 
 #[async_trait::async_trait]
 impl Solver for TlsAlpn01Solver {
+    #[instrument(
+        level = Level::INFO,
+        name = "Solver::present",
+        err,
+        skip_all,
+        fields(token, domain, solver = std::any::type_name::<Self>()),
+    )]
     async fn present(
         &self,
         domain: String,
         token: String,
         key_authorization: String,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let (certificate, private_key) =
             generate_certificate(&domain, &key_authorization).map_err(boxed_err)?;
         let (certificate, private_key) =
@@ -95,10 +105,14 @@ impl Solver for TlsAlpn01Solver {
         Ok(())
     }
 
-    async fn cleanup(
-        &self,
-        token: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    #[instrument(
+        level = Level::INFO,
+        name = "Solver::cleanup",
+        err,
+        skip_all,
+        fields(token, solver = std::any::type_name::<Self>()),
+    )]
+    async fn cleanup(&self, token: &str) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let mut challenges = self.challenges.write();
         challenges.remove(token);
 
@@ -121,7 +135,11 @@ fn new_acceptor(challenges: Challenges<Authorization>) -> io::Result<TlsAcceptor
     });
 
     acceptor.set_servername_callback(move |ssl, _alert| {
+        let span = span!(Level::DEBUG, "SslAcceptor::servername_callback");
+        let _enter = span.enter();
+
         let servername = ssl.servername(NameType::HOST_NAME).ok_or(SniError::NOACK)?;
+        span.record("host", &servername);
 
         let challenges = challenges.read();
         let authorization = challenges
@@ -144,18 +162,44 @@ async fn server(
     stop: oneshot::Receiver<()>,
 ) -> io::Result<()> {
     let mut stop = stop.fuse();
+    let acceptor = Arc::new(acceptor);
+
+    #[instrument(
+        level = Level::INFO,
+        name = "TlsAlpn01Solver::request",
+        skip_all,
+        fields(address),
+    )]
+    async fn handler(result: io::Result<(TcpStream, SocketAddr)>, acceptor: Arc<TlsAcceptor>) {
+        let (socket, address) = match result {
+            Ok(s) => s,
+            Err(error) => {
+                error!(%error, source = ?error.source(), "failed to accept connection");
+                return;
+            }
+        };
+
+        Span::current().record("address", field::display(address));
+
+        match acceptor.accept(socket).await {
+            Ok(mut socket) => {
+                debug_assert!(socket.get_ref().ssl().selected_alpn_protocol().is_some());
+
+                // Nothing to do once the handshake finishes
+                let _ = socket.shutdown().await;
+            }
+            Err(error) => {
+                error!(%error, source = ?error.source(), "failed to perform tls handshake");
+            }
+        }
+    }
 
     loop {
         futures::select_biased! {
             _ = stop => break,
             result = listener.accept().fuse() => {
-                let (socket, _addr) = result?;
-                if let Ok(mut socket) = acceptor.accept(socket).await {
-                    debug_assert!(socket.get_ref().ssl().selected_alpn_protocol().is_some());
-
-                    // Nothing to do once the handshake finishes
-                    let _ = socket.shutdown().await;
-                }
+                let acceptor = acceptor.clone();
+                tokio::spawn(handler(result, acceptor));
             }
         }
     }
