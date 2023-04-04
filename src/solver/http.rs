@@ -1,5 +1,5 @@
 use super::{
-    common::{ChallengeAuthorization, Challenges, SolverHandle},
+    common::{Challenges, SolverHandle},
     Solver,
 };
 use hyper::{
@@ -19,7 +19,7 @@ use tokio::sync::oneshot;
 /// A bare-bones implementation of a solver for the HTTP-01 challenge.
 #[derive(Clone, Debug, Default)]
 pub struct Http01Solver {
-    challenges: Challenges,
+    challenges: Challenges<Authorization>,
 }
 
 impl Http01Solver {
@@ -68,7 +68,7 @@ impl Solver for Http01Solver {
         let mut challenges = self.challenges.write();
         challenges.insert(
             token,
-            ChallengeAuthorization {
+            Authorization {
                 domain,
                 key_authorization,
             },
@@ -88,7 +88,13 @@ impl Solver for Http01Solver {
     }
 }
 
-struct SolverService(Challenges);
+#[derive(Debug)]
+pub(crate) struct Authorization {
+    pub domain: String,
+    pub key_authorization: String,
+}
+
+struct SolverService(Challenges<Authorization>);
 
 impl Service<Request<Body>> for SolverService {
     type Response = Response<Body>;
@@ -146,7 +152,7 @@ impl Service<Request<Body>> for SolverService {
     }
 }
 
-struct MakeSvc(Challenges);
+struct MakeSvc(Challenges<Authorization>);
 
 impl<T> Service<T> for MakeSvc {
     type Response = SolverService;

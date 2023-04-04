@@ -142,15 +142,15 @@ async fn one_byte_at_a_time() {
 fn context() -> (TlsAcceptor, TlsConnector) {
     let pkcs12 = fs::read(CERT_DIR.join("identity.p12")).unwrap();
     let pkcs12 = Pkcs12::from_der(&pkcs12).unwrap();
-    let parsed = pkcs12.parse2("mypass").unwrap();
+    let parsed = pkcs12.parse("mypass").unwrap();
 
     let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-    acceptor.set_private_key(&parsed.pkey.unwrap()).unwrap();
-    acceptor.set_certificate(&parsed.cert.unwrap()).unwrap();
+    acceptor.set_private_key(&parsed.pkey).unwrap();
+    acceptor.set_certificate(&parsed.cert).unwrap();
     parsed
-        .ca
-        .unwrap_or_else(|| Stack::new().unwrap())
+        .chain
         .into_iter()
+        .flatten()
         .rev()
         .for_each(|c| acceptor.add_extra_chain_cert(c).unwrap());
     acceptor.set_min_proto_version(None).unwrap();

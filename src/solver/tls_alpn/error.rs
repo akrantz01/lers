@@ -1,5 +1,8 @@
 use openssl::{error::ErrorStack, ssl, x509::X509VerifyResult};
-use std::fmt::{Debug, Display, Formatter};
+use std::{
+    fmt::{Debug, Display, Formatter},
+    io::{self, ErrorKind},
+};
 
 /// From https://github.com/sfackler/rust-native-tls/blob/8fa929d6c3fb7c7adfca9e0fdd6446f5dfb34f92/src/imp/openssl.rs#L112-L150
 #[derive(Debug)]
@@ -30,5 +33,11 @@ impl Display for Error {
 impl From<ErrorStack> for Error {
     fn from(err: ErrorStack) -> Self {
         Error::Normal(err)
+    }
+}
+
+impl From<Error> for io::Error {
+    fn from(err: Error) -> io::Error {
+        io::Error::new(ErrorKind::Other, err)
     }
 }

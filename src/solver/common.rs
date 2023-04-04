@@ -2,13 +2,7 @@ use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 use tokio::{sync::oneshot, task::JoinHandle};
 
-pub(crate) type Challenges = Arc<RwLock<HashMap<String, ChallengeAuthorization>>>;
-
-#[derive(Debug)]
-pub(crate) struct ChallengeAuthorization {
-    pub domain: String,
-    pub key_authorization: String,
-}
+pub(crate) type Challenges<T> = Arc<RwLock<HashMap<String, T>>>;
 
 /// A handle to stop the solver server once started.
 pub struct SolverHandle<E> {
@@ -19,7 +13,7 @@ pub struct SolverHandle<E> {
 impl<E> SolverHandle<E> {
     /// Stop the server
     pub async fn stop(self) -> Result<(), E> {
-        self.tx.send(()).unwrap();
+        let _ = self.tx.send(());
         self.handle.await.unwrap()
     }
 }

@@ -251,6 +251,7 @@ impl<S: Unpin> AllowStd<S> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_ref(&self) -> &S {
         &self.inner
     }
