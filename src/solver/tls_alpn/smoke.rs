@@ -1,43 +1,21 @@
 use super::stream::{AllowStd, TlsAcceptor};
 use futures::join;
-use lazy_static::lazy_static;
 use native_tls::Certificate;
 use openssl::{
     pkcs12::Pkcs12,
     ssl::{SslAcceptor, SslMethod, SslStream},
-    stack::Stack,
     x509::X509VerifyResult,
 };
 use std::{
     fs,
     io::{Error, ErrorKind},
     iter,
-    path::PathBuf,
-    process::Command,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
 use tokio_native_tls::TlsConnector;
-
-lazy_static! {
-    static ref CERT_DIR: PathBuf = {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path();
-
-        Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "./hack/generate-certificates.sh {}",
-                path.display()
-            ))
-            .output()
-            .expect("failed to execute process");
-
-        dir.into_path()
-    };
-}
 
 #[tokio::test]
 async fn client_to_server() {
@@ -140,15 +118,15 @@ async fn one_byte_at_a_time() {
 }
 
 fn context() -> (TlsAcceptor, TlsConnector) {
-    let pkcs12 = fs::read(CERT_DIR.join("identity.p12")).unwrap();
+    let pkcs12 = fs::read("testdata/tls-alpn-01/identity.p12").unwrap();
     let pkcs12 = Pkcs12::from_der(&pkcs12).unwrap();
-    let parsed = pkcs12.parse("mypass").unwrap();
+    let parsed = pkcs12.parse2("mypass").unwrap();
 
     let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-    acceptor.set_private_key(&parsed.pkey).unwrap();
-    acceptor.set_certificate(&parsed.cert).unwrap();
+    acceptor.set_private_key(&parsed.pkey.unwrap()).unwrap();
+    acceptor.set_certificate(&parsed.cert.unwrap()).unwrap();
     parsed
-        .chain
+        .ca
         .into_iter()
         .flatten()
         .rev()
@@ -157,7 +135,7 @@ fn context() -> (TlsAcceptor, TlsConnector) {
     acceptor.set_max_proto_version(None).unwrap();
     let acceptor = acceptor.build();
 
-    let der = fs::read(CERT_DIR.join("root-ca.der")).unwrap();
+    let der = fs::read("testdata/tls-alpn-01/root-ca.der").unwrap();
     let cert = Certificate::from_der(&der).unwrap();
     let connector = native_tls::TlsConnector::builder()
         .add_root_certificate(cert)
