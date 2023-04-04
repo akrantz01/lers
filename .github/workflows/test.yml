@@ -38,3 +38,22 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
 
       - run: just test http-01,dns-01 --no-default-features
+
+  examples:
+    name: Examples
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pip install yq
+
+      - name: Build examples
+        run: |
+          for example in $(tomlq -r '.example[] | "\(.name):\(.["required-features"] | join(","))"' Cargo.toml); do
+            name=$(echo $example | awk -F: '{ print $1 }')
+            features=$(echo $example | awk -F: '{ print $2 }')
+
+            echo "Building example $name"
+            cargo build --example $name --features $features
+          done
