@@ -38,6 +38,7 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "nat
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["fs", "time"] }
+tracing = "0.1"
 trust-dns-resolver = { version = "0.22", optional = true }
 
 [dev-dependencies]
