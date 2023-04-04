@@ -9,6 +9,7 @@ use reqwest::{header, Client, Response};
 use serde::Serialize;
 use std::{future::Future, sync::Arc, time::Duration};
 use tokio::time;
+use tracing::{instrument, Level, Span};
 
 mod jws;
 mod nonce;
@@ -36,6 +37,12 @@ struct ApiInner {
 
 impl Api {
     /// Construct the API for a directory from a URL
+    #[instrument(
+        level = Level::TRACE,
+        name = "Api::from_url",
+        err,
+        skip(client, solvers),
+    )]
     pub(crate) async fn from_url(
         url: String,
         client: Client,
@@ -81,6 +88,19 @@ impl Api {
     }
 
     /// Perform an authenticated request to the API
+    #[instrument(
+        level = Level::TRACE,
+        name = "Api::request",
+        err,
+        skip_all,
+        fields(
+            ?account_id,
+            http.body.len = body.len(),
+            http.url = %url,
+            http.method = "POST",
+            http.status,
+        )
+    )]
     async fn request(
         &self,
         url: &str,
@@ -106,9 +126,12 @@ impl Api {
                 .send()
                 .await?;
 
+            let status = response.status();
+            Span::current().record("http.status", status.as_u16());
+
             self.0.nonces.extract_from_response(&response)?;
 
-            if response.status().is_success() {
+            if status.is_success() {
                 return Ok(response);
             }
 
