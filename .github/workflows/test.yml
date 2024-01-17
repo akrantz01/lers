@@ -22,14 +22,14 @@ jobs:
           installer-parallel: true
 
       - name: Load cached $HOME/.local
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.local
           key: local-${{ runner.os }}-${{ hashFiles('.github/workflows/test.yml') }}
 
       - name: Load cached venv
         id: cached-poetry-dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .venv
           key: venv-${{ runner.os }}-${{ hashFiles('poetry.lock') }}-${{ hashFiles('.github/workflows/test.yml') }}
