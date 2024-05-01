@@ -44,7 +44,7 @@ trust-dns-resolver = { version = "0.23.2", optional = true }
 uuid = { version = "1.4.1", features = ["v4"], optional = true }
 
 [dev-dependencies]
-anyhow = "1"
+anyhow = "1.0.82"
 env_logger = "0.10"
 native-tls = { version = "0.2" }
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
