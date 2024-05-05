@@ -51,7 +51,7 @@ test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tokio-native-tls = { version = "0.3" }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt"] }
-x509-parser = "0.15"
+x509-parser = "0.16"
 
 [package.metadata.docs.rs]
 all-features = true
