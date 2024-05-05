@@ -30,7 +30,7 @@ base64 = "0.21"
 chrono = { version = "0.4", features = ["serde"] }
 futures = { version = "0.3", default-features = false, features = ["async-await", "std"] }
 hex = "0.4.3"
-hyper = { version = "0.14", features = ["server", "tcp"], optional = true }
+hyper = { version = "1.0", features = ["server", "tcp"], optional = true }
 once_cell = { version = "1", features = ["parking_lot"] }
 openssl = "0.10"
 parking_lot = "0.12"
