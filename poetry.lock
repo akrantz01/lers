@@ -2,19 +2,19 @@
 
 [[package]]
 name = "acme"
-version = "2.7.0"
+version = "2.11.1"
 description = "ACME protocol implementation in Python"
 category = "main"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "acme-2.7.0-py3-none-any.whl", hash = "sha256:fabdcb97801dfd3bc23ac7ca7175f2d98e4192b62297a6efd6e6718423653ac3"},
-    {file = "acme-2.7.0.tar.gz", hash = "sha256:7aeaf0886322ca5569bc532828086ff2a7fc5b66a29a0a5d3270363d448af228"},
+    {file = "acme-2.11.1-py3-none-any.whl", hash = "sha256:f3e712766bb3c66b7185e98b9109776f2d79b5d0515bcbbe43d023ff6a8a0e08"},
+    {file = "acme-2.11.1.tar.gz", hash = "sha256:d834aea83a8ada3871817d388f64e9e05f351c78395ed26110d59fdb4b7d9f8d"},
 ]
 
 [package.dependencies]
 cryptography = ">=3.2.1"
-josepy = ">=1.13.0"
+josepy = ">=1.13.0,<2.0"
 PyOpenSSL = ">=17.5.0,<23.1.0 || >23.1.0"
 pyrfc3339 = "*"
 pytz = ">=2019.3"
