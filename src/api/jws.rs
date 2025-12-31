@@ -213,20 +213,17 @@ fn signer(private_key: &PKey<Private>, protected: &str, payload: &str) -> Result
         }
         Id::EC => {
             let ec = private_key.ec_key()?;
-            let digest = match ec.group().curve_name() {
-                Some(Nid::X9_62_PRIME256V1) => sha256(&data).to_vec(),
-                Some(Nid::SECP384R1) => sha384(&data).to_vec(),
-                Some(Nid::SECP521R1) => sha512(&data).to_vec(),
+            let (digest, size) = match ec.group().curve_name() {
+                Some(Nid::X9_62_PRIME256V1) => (sha256(&data).to_vec(), 32),
+                Some(Nid::SECP384R1) => (sha384(&data).to_vec(), 48),
+                Some(Nid::SECP521R1) => (sha512(&data).to_vec(), 66),
                 _ => unreachable!(),
             };
 
             let sig = EcdsaSig::sign(&digest, &ec)?;
-            let r = sig.r().to_vec();
-            let s = sig.s().to_vec();
 
-            let mut result = Vec::with_capacity(r.len() + s.len());
-            result.extend_from_slice(&r);
-            result.extend_from_slice(&s);
+            let mut result = sig.r().to_vec_padded(size)?;
+            result.extend(sig.s().to_vec_padded(size)?);
             Ok(result)
         }
         _ => Err(Error::UnsupportedKeyType),
